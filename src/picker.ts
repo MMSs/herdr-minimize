@@ -4,7 +4,7 @@ import { herdr } from "./herdr";
 import { activeContext, liveViews, restoreEntry, UserError } from "./ops";
 import { runEntrypoint } from "./run";
 import { renderPicker } from "./tui/render";
-import { parseInput, Screen, screenLines } from "./tui/term";
+import { InputReader, type Key, Screen, screenLines } from "./tui/term";
 
 const DOUBLE_CLICK_MS = 400;
 
@@ -51,8 +51,10 @@ await runEntrypoint(async () => {
   screen.start();
   process.on("exit", () => screen.stop());
   process.stdout.on("resize", draw);
-  process.stdin.on("data", (data) => {
-    for (const key of parseInput(data.toString())) {
+  const reader = new InputReader();
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  const handle = (keys: Key[]) => {
+    for (const key of keys) {
       switch (key.kind) {
         case "char":
           setQuery(query + key.ch);
@@ -96,6 +98,13 @@ await runEntrypoint(async () => {
       }
     }
     draw();
+  };
+  process.stdin.on("data", (data) => {
+    clearTimeout(flushTimer);
+    handle(reader.feed(data.toString()));
+    // A lone ESC stays pending in case it starts a sequence; if nothing
+    // follows quickly, it was the Escape key.
+    if (reader.pending) flushTimer = setTimeout(() => handle(reader.flush()), 30);
   });
 
   const tick = setInterval(() => {

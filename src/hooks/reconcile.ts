@@ -3,7 +3,10 @@
 import { keepParkingLast, reconcile } from "../ops";
 import { runEntrypoint } from "../run";
 
-await runEntrypoint(async () => {
-  await reconcile();
-  await keepParkingLast();
-});
+await runEntrypoint(
+  async () => {
+    await reconcile();
+    await keepParkingLast();
+  },
+  { quiet: true }, // runs on every pane/tab event; never notify for it
+);

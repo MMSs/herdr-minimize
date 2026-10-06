@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { clipAnsi, parseInput, screenLines, stripAnsi } from "../src/tui/term";
+import { clipAnsi, InputReader, parseInput, screenLines, stripAnsi } from "../src/tui/term";
 
 describe("parseInput", () => {
   test("distinguishes enter, ctrl+j and ctrl+k", () => {
@@ -56,5 +56,30 @@ describe("clipAnsi", () => {
 describe("screenLines", () => {
   test("normalises CRLF, expands tabs, drops trailing blank lines", () => {
     expect(screenLines("a\r\n\tb\r\n\r\n\x1b[0m\r\n")).toEqual(["a", "    b"]);
+  });
+});
+
+describe("InputReader", () => {
+  test("holds an escape sequence split across reads until it completes", () => {
+    const r = new InputReader();
+    expect(r.feed("\x1b[")).toEqual([]);
+    expect(r.feed("A")).toEqual([{ kind: "up" }]);
+    expect(r.feed("\x1b[<0;5")).toEqual([]);
+    expect(r.feed(";3M")).toEqual([{ kind: "mouse", button: 0, x: 5, y: 3, release: false }]);
+  });
+  test("keeps the complete keys before a trailing partial sequence", () => {
+    const r = new InputReader();
+    expect(r.feed("ab\x1b")).toEqual([
+      { kind: "char", ch: "a" },
+      { kind: "char", ch: "b" },
+    ]);
+    expect(r.feed("[B")).toEqual([{ kind: "down" }]);
+  });
+  test("a lone escape becomes esc when flushed", () => {
+    const r = new InputReader();
+    expect(r.feed("\x1b")).toEqual([]);
+    expect(r.pending).toBe(true);
+    expect(r.flush()).toEqual([{ kind: "esc" }]);
+    expect(r.pending).toBe(false);
   });
 });

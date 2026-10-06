@@ -98,14 +98,24 @@ function parkingTab(state: State, workspace: string, lv: Live): string | null {
 
 const isParkingTab = (state: State, tab: string) => Object.values(state.parking).includes(tab);
 
+/**
+ * The invariant every entry must hold: its pane is alive and sits in a ▾ tab.
+ * Panes that exited or were moved back by hand fail it and are no longer
+ * minimized, whatever the state file says.
+ */
+function isParked(state: State, lv: Live) {
+  const parkingTabs = new Set(Object.values(state.parking));
+  return (e: Entry) => parkingTabs.has(lv.byTerminal.get(e.terminal_id)?.tab_id ?? "");
+}
+
 export function liveViews(tab: string): View[] {
-  const ts = loadState().tabs[tab];
+  const state = loadState();
+  const ts = state.tabs[tab];
   if (!ts) return [];
   const lv = live();
-  return ts.entries.flatMap((e) => {
-    const p = lv.byTerminal.get(e.terminal_id);
-    return p ? [toView(e, p)] : [];
-  });
+  return ts.entries
+    .filter(isParked(state, lv))
+    .map((e) => toView(e, lv.byTerminal.get(e.terminal_id) as PaneInfo));
 }
 
 /** Moves every workspace's "▾" tab back to the end of its tab bar. */
@@ -140,7 +150,11 @@ export async function minimize(ctx: Ctx): Promise<void> {
     if (!removal) throw new UserError("Only pane in this tab — nothing to minimize.");
     if (zoomed) herdr.zoomOff(ctx.pane);
 
+    // Everything that can fail is done before the pane moves, so a moved pane
+    // always gets saved in state.
+    const name = displayName(x, herdr.processName(x.pane_id));
     const ts = tabState(state, ctx.tab);
+    ts.entries = ts.entries.filter(isParked(state, lv));
     ts.layout = fullLayout(ts.layout ?? null, tree, hidden(ts.entries));
     const parking = parkingTab(state, x.workspace_id, lv);
     const parked = parking
@@ -149,7 +163,7 @@ export async function minimize(ctx: Ctx): Promise<void> {
     state.parking[x.workspace_id] = parked.tab_id;
     ts.entries.push({
       terminal_id: x.terminal_id,
-      name: displayName(x, herdr.processName(x.pane_id)),
+      name,
       minimized_at: new Date().toISOString(),
       siblings: removal.siblings,
       dir: removal.dir,
@@ -167,13 +181,25 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     const ts = state.tabs[tab];
     const entry = ts?.entries.find((e) => e.terminal_id === terminal);
     if (!ts || !entry) throw new UserError("That pane is no longer minimized.");
-    const lv = live();
-    if (!lv.byTerminal.has(terminal)) {
-      ts.entries = ts.entries.filter((e) => e !== entry);
+    let lv = live();
+    if (!isParked(state, lv)(entry)) {
+      ts.entries = ts.entries.filter(isParked(state, lv));
+      if (ts.entries.length === 0) delete state.tabs[tab];
       saveState(state);
-      throw new UserError("That pane has exited.");
+      throw new UserError(
+        lv.byTerminal.has(terminal)
+          ? "That pane is already back in a tab."
+          : "That pane has exited.",
+      );
     }
-    const { tree } = await tabTree(tab, lv);
+    ts.entries = ts.entries.filter(isParked(state, lv));
+    let { tree, zoomed } = await tabTree(tab, lv);
+    if (zoomed) {
+      // A zoomed tab would hide the restored pane; its layout also can't be resized.
+      herdr.zoomOff([...lv.byPane.values()].find((p) => p.tab_id === tab)?.pane_id as string);
+      lv = live();
+      ({ tree, zoomed } = await tabTree(tab, lv));
+    }
     // Restore through the tab's full layout so panes come back in any order.
     const full = fullLayout(ts.layout ?? null, tree, hidden(ts.entries));
     const stillHidden = ts.entries.filter((e) => e !== entry).map((e) => e.terminal_id);
@@ -199,29 +225,34 @@ export async function reconcile(): Promise<{ closed: number }> {
   if (Object.keys(before.tabs).length === 0 && Object.keys(before.parking).length === 0) {
     return { closed: 0 };
   }
-  return withLock(async () => {
-    const state = loadState();
-    const lv = live();
-    const liveTabs = new Set([...lv.byPane.values()].map((p) => p.tab_id));
-    const parkingTabs = new Set(Object.values(state.parking));
-    let closed = 0;
-    for (const [tab, ts] of Object.entries(state.tabs)) {
-      ts.entries = ts.entries.filter((e) =>
-        parkingTabs.has(lv.byTerminal.get(e.terminal_id)?.tab_id ?? ""),
-      );
-      if (!liveTabs.has(tab)) {
-        for (const e of ts.entries) {
-          herdr.closePane((lv.byTerminal.get(e.terminal_id) as PaneInfo).pane_id);
-          closed++;
+  // Hooks queue behind a long restore (its staging tab fires tab.created),
+  // so they wait longer than a keypress would.
+  return withLock(
+    async () => {
+      const state = loadState();
+      const lv = live();
+      const liveTabs = new Set([...lv.byPane.values()].map((p) => p.tab_id));
+      const parkingTabs = new Set(Object.values(state.parking));
+      let closed = 0;
+      for (const [tab, ts] of Object.entries(state.tabs)) {
+        ts.entries = ts.entries.filter((e) =>
+          parkingTabs.has(lv.byTerminal.get(e.terminal_id)?.tab_id ?? ""),
+        );
+        if (!liveTabs.has(tab)) {
+          for (const e of ts.entries) {
+            herdr.closePane((lv.byTerminal.get(e.terminal_id) as PaneInfo).pane_id);
+            closed++;
+          }
+          ts.entries = [];
         }
-        ts.entries = [];
+        if (ts.entries.length === 0) delete state.tabs[tab];
       }
-      if (ts.entries.length === 0) delete state.tabs[tab];
-    }
-    for (const [workspace, tab] of Object.entries(state.parking)) {
-      if (!liveTabs.has(tab)) delete state.parking[workspace];
-    }
-    saveState(state);
-    return { closed };
-  });
+      for (const [workspace, tab] of Object.entries(state.parking)) {
+        if (!liveTabs.has(tab)) delete state.parking[workspace];
+      }
+      saveState(state);
+      return { closed };
+    },
+    { timeoutMs: 60_000 },
+  );
 }

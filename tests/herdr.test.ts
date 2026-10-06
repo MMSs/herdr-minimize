@@ -67,4 +67,12 @@ describe("herdr cli", () => {
     reply({ result: { process_info: { foreground_processes: [{ name: "lazygit" }] } } });
     expect(herdr.processName("w1:p1")).toBe("lazygit");
   });
+
+  test("processName is best-effort: a failed lookup gives null instead of throwing", () => {
+    reply("", 1);
+    process.env.FAKE_HERDR_ERR = JSON.stringify({
+      error: { code: "pane_not_found", message: "gone" },
+    });
+    expect(herdr.processName("w1:p1")).toBeNull();
+  });
 });

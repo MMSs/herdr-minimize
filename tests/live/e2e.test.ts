@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { cli, cliText, herdr } from "../../src/herdr";
 import {
   keepParkingLast,
+  liveViews,
   minimize,
   PARKING_LABEL,
   reconcile,
@@ -183,5 +184,28 @@ describe.skipIf(!LIVE)("live herdr", () => {
     expect(herdr.listPanes().some((q) => q.pane_id === victim)).toBe(false);
     expect(loadState().tabs[t2]).toBeUndefined();
     expect(tabPanes(cli(["pane", "get", root]).pane.tab_id)).toHaveLength(1);
+  }, 60_000);
+
+  test("a minimized pane moved back by hand is no longer treated as minimized", async () => {
+    const { tab, root } = sandbox();
+    const b = splitPane(root, "right");
+    await minimize({ tab, pane: b });
+    cli(["pane", "move", b, "--tab", tab, "--target-pane", root, "--split", "right", "--no-focus"]);
+    expect(liveViews(tab)).toEqual([]);
+    await expect(restoreEntry(tab, terminalOf(b))).rejects.toBeInstanceOf(UserError);
+    expect(loadState().tabs[tab]).toBeUndefined();
+    await minimize({ tab, pane: b }); // no duplicate entry
+    expect(loadState().tabs[tab]!.entries).toHaveLength(1);
+    await restoreAll(tab);
+  }, 60_000);
+
+  test("restoring into a zoomed tab unzooms it so the pane is visible", async () => {
+    const { tab, root } = sandbox();
+    const b = splitPane(root, "right");
+    splitPane(b, "down");
+    await minimize({ tab, pane: b });
+    cli(["pane", "zoom", root, "--on"]);
+    await restoreEntry(tab, terminalOf(b));
+    expect((await herdr.exportLayout(root)).zoomed).toBe(false);
   }, 60_000);
 });

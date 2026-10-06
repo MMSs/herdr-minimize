@@ -104,9 +104,17 @@ export async function rpc(method: string, params: object): Promise<any> {
 export const herdr = {
   currentPane: (): PaneInfo => cli(["pane", "current", "--current"]).pane,
   listPanes: (): PaneInfo[] => cli(["pane", "list"]).panes,
-  processName: (pane: string): string | null =>
-    cli(["pane", "process-info", "--pane", pane]).process_info?.foreground_processes?.[0]?.name ??
-    null,
+  /** Best-effort: only used for display names, so a failed lookup is just "no name". */
+  processName: (pane: string): string | null => {
+    try {
+      return (
+        cli(["pane", "process-info", "--pane", pane]).process_info?.foreground_processes?.[0]
+          ?.name ?? null
+      );
+    } catch {
+      return null;
+    }
+  },
   exportLayout: async (pane: string): Promise<LayoutExport> =>
     (await rpc("layout.export", { pane_id: pane })).layout,
   setRatio: async (tab: string, path: Path, ratio: number): Promise<void> => {

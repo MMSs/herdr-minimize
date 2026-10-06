@@ -74,6 +74,36 @@ export function parseInput(data: string): Key[] {
   return keys;
 }
 
+// An escape sequence that hasn't seen its final byte yet: lone ESC, a CSI or
+// SS3 still collecting parameters, or an unterminated APC/OSC string.
+const PARTIAL = /\x1b(?:\[[0-9;?<]*|O|_[^\x1b]*|\][^\x07\x1b]*)?$/;
+
+/**
+ * Parses input across reads: a terminal can split an escape sequence (an
+ * arrow key, a mouse report) over two chunks. Holds the unfinished tail until
+ * the next chunk; `flush()` gives it up, e.g. a lone ESC after a short pause.
+ */
+export class InputReader {
+  private buffer = "";
+
+  get pending(): boolean {
+    return this.buffer.length > 0;
+  }
+
+  feed(chunk: string): Key[] {
+    const data = this.buffer + chunk;
+    const partial = PARTIAL.exec(data);
+    this.buffer = partial ? partial[0] : "";
+    return parseInput(partial ? data.slice(0, partial.index) : data);
+  }
+
+  flush(): Key[] {
+    const rest = this.buffer;
+    this.buffer = "";
+    return parseInput(rest);
+  }
+}
+
 export function stripAnsi(s: string): string {
   return s.replace(new RegExp(ESCAPE.source.slice(1), "g"), "");
 }
@@ -111,6 +141,7 @@ export class Screen {
   start(): void {
     process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
     process.stdin.setRawMode?.(true);
+    process.stdin.setEncoding("utf8"); // never split a multi-byte character
     process.stdin.resume();
   }
   stop(): void {
