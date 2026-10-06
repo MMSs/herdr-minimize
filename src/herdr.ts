@@ -138,6 +138,12 @@ export const herdr = {
   openPluginPane: (entrypoint: string, args: string[] = []): PaneInfo | null =>
     cli(["plugin", "pane", "open", "--plugin", PLUGIN_ID, "--entrypoint", entrypoint, ...args])
       ?.plugin_pane?.pane ?? null,
+  listTabs: (workspace: string): { tab_id: string; label: string }[] =>
+    cli(["tab", "list", "--workspace", workspace]).tabs,
+  /** Moves a tab; insert_index = tab count puts it last. */
+  moveTab: async (tab: string, index: number): Promise<void> => {
+    await rpc("tab.move", { tab_id: tab, insert_index: index });
+  },
   readScreen: (pane: string): string =>
     cliText(["pane", "read", pane, "--source", "visible", "--format", "ansi"]),
 };

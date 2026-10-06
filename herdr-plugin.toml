@@ -14,9 +14,3 @@ command = ["sh", "scripts/preflight.sh"]
 
 # Entrypoints ([[actions]], [[panes]], [[startup]], [[events]]) are added as they
 # are implemented; see docs/design.md for the planned set.
-
-[[panes]]
-id = "tray"
-title = "minimized"
-placement = "split"
-command = ["bun", "src/tray.ts"]

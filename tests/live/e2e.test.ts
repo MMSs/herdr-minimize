@@ -3,7 +3,15 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { dirname, join } from "node:path";
 import { cli, cliText, herdr } from "../../src/herdr";
-import { minimize, reconcile, restoreAll, restoreEntry, UserError } from "../../src/ops";
+import {
+  keepParkingLast,
+  minimize,
+  PARKING_LABEL,
+  reconcile,
+  restoreAll,
+  restoreEntry,
+  UserError,
+} from "../../src/ops";
 import { loadState } from "../../src/state";
 
 const LIVE = !!process.env.MINIMIZE_LIVE;
@@ -39,6 +47,8 @@ function expectSameRects(a: Map<string, Rect>, b: Map<string, Rect>) {
   }
 }
 const tabPanes = (tab: string) => herdr.listPanes().filter((p) => p.tab_id === tab);
+const tabsOf = (ws: string): { tab_id: string; label: string }[] =>
+  cli(["tab", "list", "--workspace", ws]).tabs;
 
 describe.skipIf(!LIVE)("live herdr", () => {
   beforeAll(() => {
@@ -75,27 +85,21 @@ describe.skipIf(!LIVE)("live herdr", () => {
   ];
 
   for (const [name, build] of layouts) {
-    test(`${name}: every pane minimizes and restores to the same rect and PID`, async () => {
-      const { tab, root } = sandbox();
+    test(`${name}: every pane minimizes into the ▾ tab and restores to the same rect and PID`, async () => {
+      const { ws, tab, root } = sandbox();
       const panes = build(root);
       for (const p of panes) {
-        const terminal = terminalOf(p);
-        // ids of panes restored earlier in this loop have changed; measure via a live member
         const before = rects(tabPanes(tab)[0]!.pane_id);
         const shell = pid(p);
         await minimize({ tab, pane: p });
-        const st = loadState().tabs[tab]!;
-        expect(st.entries.map((e) => e.terminal_id)).toEqual([terminal]);
-        expect(tabPanes(tab).some((q) => q.terminal_id === terminal)).toBe(false);
-        const tray = tabPanes(tab).find((q) => q.terminal_id === st.tray_terminal_id)!;
-        const trayRect = rects(tray.pane_id).get(tray.terminal_id)!;
-        expect(trayRect.y).toBe(0);
-        await restoreEntry(tab, terminal);
+        const parking = loadState().parking[ws]!;
+        expect(tabsOf(ws).at(-1)).toMatchObject({ tab_id: parking, label: PARKING_LABEL });
+        expect(tabPanes(parking).map((q) => q.pane_id)).toEqual([p]); // same workspace: id kept
+        await restoreEntry(tab, terminalOf(p));
         expect(loadState().tabs[tab]).toBeUndefined();
-        const anchor = tabPanes(tab)[0]!.pane_id;
-        expectSameRects(before, rects(anchor));
-        const back = tabPanes(tab).find((q) => q.terminal_id === terminal)!;
-        expect(pid(back.pane_id)).toBe(shell);
+        expect(tabsOf(ws).some((t) => t.label === PARKING_LABEL)).toBe(false); // empty ▾ tab closed
+        expectSameRects(before, rects(tabPanes(tab)[0]!.pane_id));
+        expect(pid(p)).toBe(shell);
       }
     }, 60_000);
   }
@@ -128,14 +132,23 @@ describe.skipIf(!LIVE)("live herdr", () => {
     expect(loadState().tabs[tab]).toBeUndefined();
   });
 
-  test("the tray itself can't be minimized", async () => {
-    const { tab, root } = sandbox();
+  test("panes in the ▾ tab can't be minimized again", async () => {
+    const { ws, tab, root } = sandbox();
     const b = splitPane(root, "right");
+    splitPane(b, "down");
     await minimize({ tab, pane: b });
-    const tray = tabPanes(tab).find(
-      (q) => q.terminal_id === loadState().tabs[tab]!.tray_terminal_id,
-    )!;
-    await expect(minimize({ tab, pane: tray.pane_id })).rejects.toBeInstanceOf(UserError);
+    const parking = loadState().parking[ws]!;
+    await expect(minimize({ tab: parking, pane: b })).rejects.toBeInstanceOf(UserError);
+    await restoreAll(tab);
+  }, 60_000);
+
+  test("the ▾ tab is moved back to the end when a new tab appears", async () => {
+    const { ws, tab, root } = sandbox();
+    await minimize({ tab, pane: splitPane(root, "right") });
+    cli(["tab", "create", "--workspace", ws, "--no-focus", "--label", "later"]);
+    expect(tabsOf(ws).at(-1)!.label).toBe("later");
+    await keepParkingLast();
+    expect(tabsOf(ws).at(-1)!.label).toBe(PARKING_LABEL);
     await restoreAll(tab);
   }, 60_000);
 
@@ -149,15 +162,26 @@ describe.skipIf(!LIVE)("live herdr", () => {
     expect(tabPanes(tab).some((q) => q.terminal_id === tc)).toBe(true);
   }, 60_000);
 
-  test("closing a minimized pane drops it and removes the tray on reconcile", async () => {
+  test("a minimized pane that exits is dropped on reconcile", async () => {
     const { tab, root } = sandbox();
     const b = splitPane(root, "right");
-    const tb = terminalOf(b);
     await minimize({ tab, pane: b });
-    const parked = herdr.listPanes().find((q) => q.terminal_id === tb)!;
-    cli(["pane", "close", parked.pane_id]);
+    cli(["pane", "close", b]);
     await reconcile();
     expect(loadState().tabs[tab]).toBeUndefined();
-    expect(tabPanes(tab)).toHaveLength(1);
+  }, 60_000);
+
+  test("closing a tab closes its minimized panes", async () => {
+    const { ws, root } = sandbox();
+    const t2: string = cli(["tab", "create", "--workspace", ws, "--no-focus"]).tab.tab_id;
+    const p = tabPanes(t2)[0]!.pane_id;
+    const victim = splitPane(p, "right");
+    await minimize({ tab: t2, pane: victim });
+    cli(["tab", "close", t2]);
+    const result = await reconcile();
+    expect(result.closed).toBe(1);
+    expect(herdr.listPanes().some((q) => q.pane_id === victim)).toBe(false);
+    expect(loadState().tabs[t2]).toBeUndefined();
+    expect(tabPanes(cli(["pane", "get", root]).pane.tab_id)).toHaveLength(1);
   }, 60_000);
 });

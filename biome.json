@@ -40,7 +40,7 @@
       }
     },
     {
-      "includes": ["src/tui/term.ts", "src/tui/kitty.ts"],
+      "includes": ["src/tui/term.ts"],
       "linter": {
         "rules": {
           "suspicious": {

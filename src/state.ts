@@ -14,18 +14,19 @@ export type Entry = {
   was_first: boolean;
 };
 export type TabState = {
-  tray_terminal_id: string | null;
   entries: Entry[];
   /** The tab's layout with every minimized pane in place (tree.fullLayout). */
   layout?: Tree | null;
 };
 export type State = {
   version: 1;
-  parking_workspace_id: string | null;
+  /** workspace id → its "▾" parking tab id */
+  parking: Record<string, string>;
+  /** source tab id → what was minimized from it */
   tabs: Record<string, TabState>;
 };
 
-export const emptyState = (): State => ({ version: 1, parking_workspace_id: null, tabs: {} });
+export const emptyState = (): State => ({ version: 1, parking: {}, tabs: {} });
 
 export function stateDir(): string {
   const dir = process.env.HERDR_PLUGIN_STATE_DIR;
@@ -43,7 +44,10 @@ export function loadState(dir = stateDir()): State {
   }
   const raw = JSON.parse(text) as { version?: unknown };
   if (raw.version !== 1) throw new Error(`unsupported state version ${String(raw.version)}`);
-  return raw as State;
+  const state = raw as State;
+  state.parking ??= {};
+  state.tabs ??= {};
+  return state;
 }
 
 export function saveState(state: State, dir = stateDir()): void {
@@ -54,7 +58,7 @@ export function saveState(state: State, dir = stateDir()): void {
 }
 
 export function tabState(state: State, tab: string): TabState {
-  state.tabs[tab] ??= { tray_terminal_id: null, entries: [] };
+  state.tabs[tab] ??= { entries: [] };
   return state.tabs[tab];
 }
 
@@ -90,4 +94,13 @@ export async function withLock<T>(fn: () => Promise<T>, opts: LockOptions = {}):
   } finally {
     rmdirSync(lock);
   }
+}
+
+/** Text for the optional right-aligned tab bar entry, per source tab. */
+export function statusTexts(state: State): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(state.tabs)
+      .filter(([, ts]) => ts.entries.length > 0)
+      .map(([tab, ts]) => [tab, `▾ ${ts.entries.length}`]),
+  );
 }

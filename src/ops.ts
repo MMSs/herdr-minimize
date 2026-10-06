@@ -1,22 +1,24 @@
 // Core minimize/restore operations. Entry points resolve the active tab and
 // call these; the live tests call them with sandbox ids.
-import { displayName, toView, type View } from "./entries";
-import { herdr, type PaneInfo, PLUGIN_ID } from "./herdr";
-import { planRebuild, type Step } from "./rebuild";
-import { type Entry, loadState, saveState, tabState, withLock } from "./state";
-import {
-  firstLeaf,
-  fromExport,
-  fullLayout,
-  type Hidden,
-  removeAll,
-  removeLeaf,
-  type Tree,
-  withoutTray,
-  wrapTray,
-} from "./tree";
 
-export const PARKING_LABEL = "minimized";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { displayName, toView, type View } from "./entries";
+import { herdr, type PaneInfo } from "./herdr";
+import { planRebuild, type Step } from "./rebuild";
+import {
+  type Entry,
+  loadState,
+  type State,
+  saveState,
+  stateDir,
+  statusTexts,
+  tabState,
+  withLock,
+} from "./state";
+import { fromExport, fullLayout, type Hidden, removeAll, removeLeaf, type Tree } from "./tree";
+
+export const PARKING_LABEL = "▾";
 
 const hidden = (entries: Entry[]): Hidden[] =>
   entries.map((e) => ({
@@ -99,8 +101,26 @@ async function execute(tab: string, steps: Step[], lv: Live, focus?: string): Pr
   }
 }
 
-function aliveTray(tray: string | null | undefined, lv: Live, tab: string): string | null {
-  return tray && lv.byTerminal.get(tray)?.tab_id === tab ? tray : null;
+/** The "▾" parking tab of a workspace, if it still exists. */
+function parkingTab(state: State, workspace: string, lv: Live): string | null {
+  const tab = state.parking[workspace];
+  return tab && [...lv.byPane.values()].some((p) => p.tab_id === tab) ? tab : null;
+}
+
+const isParkingTab = (state: State, tab: string) => Object.values(state.parking).includes(tab);
+
+/** Writes the optional tab-bar status files: <state>/status/<tab id> = "▾ N". */
+function writeStatus(state: State): void {
+  const dir = join(stateDir(), "status");
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  for (const [tab, text] of Object.entries(statusTexts(state)))
+    writeFileSync(join(dir, tab), `${text}\n`);
+}
+
+function save(state: State): void {
+  saveState(state);
+  writeStatus(state);
 }
 
 export function liveViews(tab: string): View[] {
@@ -113,83 +133,60 @@ export function liveViews(tab: string): View[] {
   });
 }
 
+/** Moves every workspace's "▾" tab back to the end of its tab bar. */
+export async function keepParkingLast(): Promise<void> {
+  const state = loadState();
+  for (const [workspace, tab] of Object.entries(state.parking)) {
+    let tabs: { tab_id: string }[];
+    try {
+      tabs = herdr.listTabs(workspace);
+    } catch {
+      continue; // workspace closed
+    }
+    if (tabs.some((t) => t.tab_id === tab) && tabs.at(-1)?.tab_id !== tab) {
+      await herdr.moveTab(tab, tabs.length);
+    }
+  }
+}
+
 export async function minimize(ctx: Ctx): Promise<void> {
   await withLock(async () => {
     const state = loadState();
+    if (isParkingTab(state, ctx.tab)) {
+      throw new UserError(
+        `This is the ${PARKING_LABEL} tab of minimized panes; restore them from their own tab.`,
+      );
+    }
     const lv = live();
     const x = lv.byPane.get(ctx.pane);
     if (!x) throw new UserError("That pane no longer exists.");
-    const tray = aliveTray(state.tabs[ctx.tab]?.tray_terminal_id, lv, ctx.tab);
-    if (x.terminal_id === tray) throw new UserError("The tray can't be minimized.");
     const { tree, zoomed } = await tabTree(ctx.tab, lv);
-    const visible = withoutTray(tree, tray);
-    const removal = removeLeaf(visible, x.terminal_id);
+    const removal = removeLeaf(tree, x.terminal_id);
     if (!removal) throw new UserError("Only pane in this tab — nothing to minimize.");
     if (zoomed) herdr.zoomOff(ctx.pane);
 
-    const name = displayName(x, herdr.processName(x.pane_id));
-    const parking =
-      state.parking_workspace_id && herdr.workspaceExists(state.parking_workspace_id)
-        ? state.parking_workspace_id
-        : null;
-    const parked = parking
-      ? herdr.movePane(x.pane_id, [
-          "--new-tab",
-          "--workspace",
-          parking,
-          "--label",
-          name,
-          "--no-focus",
-        ])
-      : herdr.movePane(x.pane_id, [
-          "--new-workspace",
-          "--label",
-          PARKING_LABEL,
-          "--tab-label",
-          name,
-          "--no-focus",
-        ]);
-    state.parking_workspace_id = parked.workspace_id;
-
     const ts = tabState(state, ctx.tab);
-    ts.layout = fullLayout(ts.layout ?? null, visible, hidden(ts.entries));
+    ts.layout = fullLayout(ts.layout ?? null, tree, hidden(ts.entries));
+    const parking = parkingTab(state, x.workspace_id, lv);
+    const parked = parking
+      ? herdr.movePane(x.pane_id, ["--tab", parking, "--split", "right", "--no-focus"])
+      : herdr.movePane(x.pane_id, ["--new-tab", "--label", PARKING_LABEL, "--no-focus"]);
+    state.parking[x.workspace_id] = parked.tab_id;
     ts.entries.push({
       terminal_id: x.terminal_id,
-      name,
+      name: displayName(x, herdr.processName(x.pane_id)),
       minimized_at: new Date().toISOString(),
       siblings: removal.siblings,
       dir: removal.dir,
       ratio: removal.ratio,
       was_first: removal.wasFirst,
     });
-    ts.tray_terminal_id = tray;
-    saveState(state); // the pane is parked; record it before anything else can fail
-
-    let trayId = tray;
-    if (!trayId) {
-      const anchor = lv.byTerminal.get(firstLeaf(removal.tree)) as PaneInfo;
-      const opened = herdr.openPluginPane("tray", [
-        "--placement",
-        "split",
-        "--target-pane",
-        anchor.pane_id,
-        "--direction",
-        "right",
-        "--no-focus",
-      ]);
-      if (!opened) throw new Error(`${PLUGIN_ID}: herdr did not return the tray pane`);
-      trayId = opened.terminal_id;
-      ts.tray_terminal_id = trayId;
-      saveState(state);
-    }
-    const lv2 = live();
-    const now = await tabTree(ctx.tab, lv2);
-    await execute(ctx.tab, planRebuild(now.tree, wrapTray(removal.tree, trayId)), lv2);
+    save(state);
   });
+  await keepParkingLast();
 }
 
 export async function restoreEntry(tab: string, terminal: string): Promise<void> {
-  let closeTray: string | null = null;
   await withLock(async () => {
     const state = loadState();
     const ts = state.tabs[tab];
@@ -198,26 +195,19 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     const lv = live();
     if (!lv.byTerminal.has(terminal)) {
       ts.entries = ts.entries.filter((e) => e !== entry);
-      saveState(state);
+      save(state);
       throw new UserError("That pane has exited.");
     }
-    const tray = aliveTray(ts.tray_terminal_id, lv, tab);
     const { tree } = await tabTree(tab, lv);
     // Restore through the tab's full layout so panes come back in any order.
-    const full = fullLayout(ts.layout ?? null, withoutTray(tree, tray), hidden(ts.entries));
+    const full = fullLayout(ts.layout ?? null, tree, hidden(ts.entries));
     const stillHidden = ts.entries.filter((e) => e !== entry).map((e) => e.terminal_id);
-    const restored = removeAll(full, stillHidden);
-    ts.layout = full;
-    // Keep the tray in place during the rebuild: it may be the process running this.
-    await execute(tab, planRebuild(tree, tray ? wrapTray(restored, tray) : restored), lv, terminal);
+    await execute(tab, planRebuild(tree, removeAll(full, stillHidden)), lv, terminal);
     ts.entries = ts.entries.filter((e) => e !== entry);
-    if (ts.entries.length === 0) {
-      delete state.tabs[tab];
-      closeTray = tray ? (live().byTerminal.get(tray)?.pane_id ?? null) : null;
-    }
-    saveState(state);
+    ts.layout = full;
+    if (ts.entries.length === 0) delete state.tabs[tab];
+    save(state);
   });
-  if (closeTray) herdr.closePane(closeTray); // last: may terminate the calling tray
 }
 
 export async function restoreAll(tab: string): Promise<void> {
@@ -225,34 +215,38 @@ export async function restoreAll(tab: string): Promise<void> {
   for (const e of [...(ts?.entries ?? [])].reverse()) await restoreEntry(tab, e.terminal_id);
 }
 
-/** Drops entries whose pane or tab is gone; closes trays with nothing left. */
-export async function reconcile(): Promise<{ orphaned: number; trayLost: string[] }> {
-  if (Object.keys(loadState().tabs).length === 0) return { orphaned: 0, trayLost: [] };
+/**
+ * Forgets panes that exited or were moved out of the ▾ tab by hand, and
+ * closes the minimized panes of tabs that no longer exist (design §4.7).
+ */
+export async function reconcile(): Promise<{ closed: number }> {
+  const before = loadState();
+  if (Object.keys(before.tabs).length === 0 && Object.keys(before.parking).length === 0) {
+    return { closed: 0 };
+  }
   return withLock(async () => {
     const state = loadState();
     const lv = live();
     const liveTabs = new Set([...lv.byPane.values()].map((p) => p.tab_id));
-    let orphaned = 0;
-    const trayLost: string[] = [];
+    const parkingTabs = new Set(Object.values(state.parking));
+    let closed = 0;
     for (const [tab, ts] of Object.entries(state.tabs)) {
-      const parked = (e: { terminal_id: string }) =>
-        lv.byTerminal.get(e.terminal_id)?.workspace_id === state.parking_workspace_id;
-      ts.entries = ts.entries.filter(parked);
+      ts.entries = ts.entries.filter((e) =>
+        parkingTabs.has(lv.byTerminal.get(e.terminal_id)?.tab_id ?? ""),
+      );
       if (!liveTabs.has(tab)) {
-        orphaned += ts.entries.length;
-        delete state.tabs[tab];
-        continue;
+        for (const e of ts.entries) {
+          herdr.closePane((lv.byTerminal.get(e.terminal_id) as PaneInfo).pane_id);
+          closed++;
+        }
+        ts.entries = [];
       }
-      const tray = aliveTray(ts.tray_terminal_id, lv, tab);
-      if (ts.entries.length === 0) {
-        delete state.tabs[tab];
-        if (tray) herdr.closePane((lv.byTerminal.get(tray) as PaneInfo).pane_id);
-      } else if (!tray && ts.tray_terminal_id) {
-        ts.tray_terminal_id = null;
-        trayLost.push(tab);
-      }
+      if (ts.entries.length === 0) delete state.tabs[tab];
     }
-    saveState(state);
-    return { orphaned, trayLost };
+    for (const [workspace, tab] of Object.entries(state.parking)) {
+      if (!liveTabs.has(tab)) delete state.parking[workspace];
+    }
+    save(state);
+    return { closed };
   });
 }
