@@ -54,6 +54,14 @@ Raw socket request: connect to `$HERDR_SOCKET_PATH`, write one line of
 back. From a terminal outside a herdr pane, find the path with
 `$H status server`.
 
+## Automated live tests
+
+`bun run test:live` runs `tests/live/` against the running herdr: minimize and
+restore across 2-, 3- and 5-pane layouts, comparing pane rects and shell PIDs,
+in throwaway `mm-e2e` workspaces it closes again. It needs this checkout
+linked as `mmss.minimize` (the tray pane is opened from the linked plugin)
+and uses the plugin's real state directory. Plain `bun test` skips it.
+
 ## Testing the plugin itself
 
 ```sh

@@ -2,7 +2,7 @@
 // read-modify-write happens under a mkdir lock so rapid keypresses serialise.
 import { mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Dir } from "./tree";
+import type { Dir, Tree } from "./tree";
 
 export type Entry = {
   terminal_id: string;
@@ -13,7 +13,12 @@ export type Entry = {
   ratio: number;
   was_first: boolean;
 };
-export type TabState = { tray_terminal_id: string | null; entries: Entry[] };
+export type TabState = {
+  tray_terminal_id: string | null;
+  entries: Entry[];
+  /** The tab's layout with every minimized pane in place (tree.fullLayout). */
+  layout?: Tree | null;
+};
 export type State = {
   version: 1;
   parking_workspace_id: string | null;

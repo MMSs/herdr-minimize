@@ -145,3 +145,31 @@ export function fromExport(n: ExportNode, key: (paneId: string) => string): Tree
     ? leaf(key(n.pane_id))
     : split(n.direction, n.ratio, fromExport(n.first, key), fromExport(n.second, key));
 }
+
+/** Removes each id in turn; ids not in the tree (or the last pane) are skipped. */
+export function removeAll(t: Tree, ids: string[]): Tree {
+  return ids.reduce((tree, id) => removeLeaf(tree, id)?.tree ?? tree, t);
+}
+
+export type Hidden = Placement & { id: string };
+
+/**
+ * The tab's layout with every minimized pane in place. The stored layout is
+ * kept while hiding its minimized panes still gives the visible tree;
+ * otherwise (the user rearranged the tab) it is rebuilt by reinserting the
+ * hidden panes newest first, undoing the minimizes in reverse.
+ */
+export function fullLayout(stored: Tree | null, visible: Tree, hidden: Hidden[]): Tree {
+  if (
+    stored &&
+    sameShape(
+      removeAll(
+        stored,
+        hidden.map((h) => h.id),
+      ),
+      visible,
+    )
+  )
+    return stored;
+  return [...hidden].reverse().reduce((tree, h) => reinsert(tree, h.id, h), visible);
+}

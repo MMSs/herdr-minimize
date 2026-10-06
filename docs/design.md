@@ -146,7 +146,16 @@ reachable by the next-agent keys.
 ### 4.3 Restore(entry E)
 
 1. Current tree of T, excluding the tray: `C`.
-2. Find the smallest subtree of `C` whose leaf set equals `E.sibling_leaves`.
+2. **Full layout.** State keeps, per tab, the layout with every minimized pane
+   still in place (`layout`). It stays valid while hiding the minimized panes
+   from it still gives `C`; the target is then the full layout minus the
+   panes that stay minimized, so panes come back exactly, in any order. (Each
+   entry's own sibling record can't do that: minimize `c` then its sibling
+   `b`, restore `c` first, and `b`'s record no longer describes the tab.)
+   If the user rearranged the tab, the full layout is rebuilt from `C` by
+   reinserting the minimized panes newest first, each by its sibling record:
+3. Reinserting by sibling record: find the smallest subtree of `C` whose leaf
+   set equals the recorded siblings.
    - Found → replace it with `split(E.direction, E.ratio, X, S)` or
      `(S, X)` per `E.x_was_first`. Because removing X gave its whole region to
      S, this reproduces the original geometry exactly (scaled by the tray
@@ -154,9 +163,9 @@ reachable by the next-agent keys.
    - Not found (layout changed since) → fall back to the surviving leaf of
      `E.sibling_leaves` with the largest area and split it in the original
      direction/ratio; if none survive, split the largest pane in T.
-3. Rebuild to the new tree, still wrapped in the tray split while the tray
+4. Rebuild to the new tree, still wrapped in the tray split while the tray
    exists. X's move into the tab uses `--focus`.
-4. Remove E from state and save. If it was the last entry for T, close the
+5. Remove E from state and save. If it was the last entry for T, close the
    tray **last**, after the save: the tray may be the process running this
    restore, and closing it removes the root split so the tab returns to its
    original layout. If the rebuild fails, the entry is kept, so the pane is
@@ -268,6 +277,9 @@ input and leaves the tiled layout alone.
   "tabs": {
     "w2:t1": {
       "tray_terminal_id": "term_65d2fc1dd0acf54",
+      "layout": { "kind": "split", "dir": "down", "ratio": 0.6,
+                  "first": { "kind": "leaf", "id": "term_65d2fbbd1de2e51" },
+                  "second": { "kind": "leaf", "id": "term_65d2fbbd24e7052" } },
       "entries": [
         { "terminal_id": "term_65d2fbbd24e7052", "name": "lazygit",
           "minimized_at": "2026-10-06T18:00:00.000Z",
@@ -332,7 +344,8 @@ command = ["bun", "src/hooks/reconcile.ts"]
 
 ## 6. Open risks — spike these first
 
-- **R1: first click on an unfocused tray.** Unverified whether herdr forwards
+- **R1: first click on an unfocused tray.** *Resolved 2026-10-06: herdr forwards
+  the first click, so one click restores.* Originally: unverified whether herdr forwards
   that click to the pane app or only uses it to focus the pane. If it only
   focuses, either accept "click to focus, click to restore", or restore the
   selected entry when the tray gains focus via a mouse click (needs focus-in

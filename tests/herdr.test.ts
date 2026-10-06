@@ -16,6 +16,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "mm-herdr-"));
   process.env.HERDR_BIN_PATH = fake;
   process.env.FAKE_HERDR_LOG = join(dir, "log");
+  process.env.FAKE_HERDR_ERR = "";
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -34,6 +35,14 @@ describe("herdr cli", () => {
     } catch (e) {
       expect((e as HerdrError).code).toBe("pane_not_found");
     }
+  });
+
+  test("API errors printed on stderr with a failing exit keep their code", () => {
+    reply("", 1);
+    process.env.FAKE_HERDR_ERR = JSON.stringify({
+      error: { code: "workspace_not_found", message: "workspace w9 not found" },
+    });
+    expect(herdr.workspaceExists("w9")).toBe(false);
   });
 
   test("non-JSON failure surfaces stderr/stdout", () => {

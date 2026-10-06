@@ -38,10 +38,17 @@ function run(args: string[]): { out: string; err: string; code: number } {
 // biome-ignore lint/suspicious/noExplicitAny: herdr responses are untyped JSON
 export function cli(args: string[]): any {
   const { out, err, code } = run(args);
-  let parsed: { result?: unknown; error?: { code: string; message: string } };
-  try {
-    parsed = JSON.parse(out);
-  } catch {
+  // herdr prints results on stdout and API errors as JSON on stderr.
+  let parsed: { result?: unknown; error?: { code: string; message: string } } | null = null;
+  for (const text of [out, err]) {
+    try {
+      parsed = JSON.parse(text);
+      break;
+    } catch {
+      // not JSON; try the other stream
+    }
+  }
+  if (!parsed) {
     throw new HerdrError(
       "cli_failed",
       `herdr ${args.join(" ")}: ${(err || out).trim() || `exit ${code}`}`,

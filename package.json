@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "bun run typecheck && bun run lint && bun test"
+    "check": "bun run typecheck && bun run lint && bun test",
+    "test:live": "MINIMIZE_LIVE=1 bun test tests/live"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

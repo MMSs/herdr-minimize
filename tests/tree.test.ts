@@ -3,10 +3,12 @@ import {
   areas,
   firstLeaf,
   fromExport,
+  fullLayout,
   leaf,
   leaves,
   pathTo,
   reinsert,
+  removeAll,
   removeLeaf,
   sameShape,
   split,
@@ -117,5 +119,42 @@ describe("tree", () => {
       (p) => `term-${p}`,
     );
     expect(t).toEqual(split("right", 0.6, leaf("term-w1:p1"), leaf("term-w1:p2")));
+  });
+
+  test("removeAll hides several panes, giving their space to siblings", () => {
+    expect(removeAll(abc, ["b", "a"])).toEqual(leaf("c"));
+    expect(removeAll(abc, [])).toEqual(abc);
+  });
+
+  test("fullLayout keeps the stored layout while the visible part still matches it", () => {
+    const hidden = [{ id: "c", ...removeLeaf(abc, "c")! }];
+    const visible = split("right", 0.6, leaf("a"), leaf("b"));
+    expect(fullLayout(abc, visible, hidden)).toBe(abc);
+  });
+
+  test("fullLayout rebuilds from placements, newest first, when there is no stored layout", () => {
+    // minimize c, then b: b's recorded sibling is a
+    const afterC = removeLeaf(abc, "c")!;
+    const afterB = removeLeaf(afterC.tree, "b")!;
+    const hidden = [
+      { id: "c", ...afterC },
+      { id: "b", ...afterB },
+    ];
+    expect(fullLayout(null, afterB.tree, hidden)).toEqual(abc);
+  });
+
+  test("fullLayout rebuilds when the user changed the visible layout", () => {
+    const hidden = [{ id: "c", ...removeLeaf(abc, "c")! }];
+    const changed = split("down", 0.5, leaf("a"), leaf("b"));
+    expect(fullLayout(abc, changed, hidden)).toEqual(
+      split("down", 0.5, leaf("a"), split("down", 0.5, leaf("b"), leaf("c"))),
+    );
+  });
+
+  test("restoring in any order through the full layout returns the original", () => {
+    // hide c then b; restore c first: target is the full layout minus b
+    expect(removeAll(abc, ["b"])).toEqual(split("right", 0.6, leaf("a"), leaf("c")));
+    // then b: the full layout itself
+    expect(removeAll(abc, [])).toEqual(abc);
   });
 });
