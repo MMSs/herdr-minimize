@@ -3,7 +3,7 @@ name = "Minimize"
 version = "0.1.0"
 # 0.9.3 is the version every herdr behaviour in docs/herdr-api-notes.md was verified against.
 min_herdr_version = "0.9.3"
-description = "Minimize panes to a clickable tray and restore them to their exact place"
+description = "Minimize panes out of the way and restore them to their exact place"
 # Windows is out of scope for v1 (docs/design.md).
 platforms = ["macos", "linux"]
 
@@ -12,5 +12,31 @@ platforms = ["macos", "linux"]
 [[build]]
 command = ["sh", "scripts/preflight.sh"]
 
-# Entrypoints ([[actions]], [[panes]], [[startup]], [[events]]) are added as they
-# are implemented; see docs/design.md for the planned set.
+[[startup]]
+command = ["bun", "src/hooks/reconcile.ts"]
+
+[[actions]]
+id = "minimize"
+title = "Minimize pane"
+contexts = ["pane"]
+command = ["bun", "src/actions/minimize.ts"]
+
+[[actions]]
+id = "restore"
+title = "Restore pane"
+contexts = ["tab"]
+command = ["bun", "src/actions/restore.ts"]
+
+# One reconcile hook keeps state honest: forget exited panes, close panes
+# whose tab closed, keep the ▾ tab last.
+[[events]]
+on = "pane.closed"
+command = ["bun", "src/hooks/reconcile.ts"]
+
+[[events]]
+on = "tab.closed"
+command = ["bun", "src/hooks/reconcile.ts"]
+
+[[events]]
+on = "tab.created"
+command = ["bun", "src/hooks/reconcile.ts"]
