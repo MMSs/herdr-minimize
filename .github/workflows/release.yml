@@ -1,0 +1,46 @@
+name: Release
+
+# After a PR is merged, bump the version from its title (fix → patch,
+# feat → minor, ! / BREAKING CHANGE → major), update the changelog, tag and
+# publish a GitHub release. Titles like docs:/chore:/ci: release nothing.
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      # Never the PR head: this job can push to main.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: oven-sh/setup-bun@v2
+      - id: bump
+        # Title and body arrive through env, never interpolated into the script.
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bun scripts/release/bump.ts "$TITLE" "$BODY" "$PR"
+      - if: steps.bump.outputs.version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          NOTES: ${{ steps.bump.outputs.notes }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "release v$VERSION"
+          git tag "v$VERSION"
+          git push origin main "v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --notes "$NOTES"

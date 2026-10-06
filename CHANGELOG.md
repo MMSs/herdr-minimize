@@ -1,8 +1,9 @@
 # Changelog
 
-All notable changes to this plugin are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the plugin uses
-[Semantic Versioning](https://semver.org/).
+All notable changes to this plugin are documented here. The plugin uses
+[Semantic Versioning](https://semver.org/). New entries are written by the
+release workflow from merged PR titles (see CONTRIBUTING.md); don't edit this
+file by hand.
 
 ## [Unreleased]
 
