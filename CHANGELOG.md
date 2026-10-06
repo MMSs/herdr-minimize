@@ -5,7 +5,7 @@ All notable changes to this plugin are documented here. The plugin uses
 release workflow from merged PR titles (see CONTRIBUTING.md); don't edit this
 file by hand.
 
-## [Unreleased]
+## [0.1.0] - 2026-10-06
 
 ### Added
 
