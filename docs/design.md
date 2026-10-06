@@ -35,8 +35,8 @@ The goal is behaviour as close to herdr's zoom as a plugin can get: the pane
 simply isn't in the tab any more, and nothing takes its place.
 
 1. **Minimize.** With a pane focused, the user presses a key (suggested
-   `prefix+i`; free base prefix letters in 0.9.3 are `a`, `i`, `y`) or picks
-   "Minimize pane" from the command palette. The pane disappears from the tab;
+   `prefix+m`, free in herdr's defaults; herdr has no command palette, so
+   plugin actions run only from key bindings). The pane disappears from the tab;
    its neighbours grow into the space exactly as if it had been closed. If it
    is the only pane in the tab, nothing happens and a notification says so.
 2. **The `▾` tab.** The pane moves to a tab labelled `▾` in the same
@@ -53,7 +53,7 @@ simply isn't in the tab any more, and nothing takes its place.
    a label to automatic numbering.) herdr's rename prompt is pre-filled with
    the current label including ` ▾`; plugins can't change that prompt.
 4. **Restore.** A plugin action "Restore pane" (suggested key
-   `prefix+shift+i`) only looks at the current tab's minimized panes:
+   `prefix+shift+m`) only looks at the current tab's minimized panes:
    - none → a notification says there is nothing to restore;
    - exactly one → that pane is restored straight away;
    - more than one → a **restore picker** opens (§4.4) so the user chooses.

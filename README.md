@@ -9,13 +9,13 @@ status and send notifications while minimized. That is the difference from the
 
 ## How it works
 
-- Press `prefix+i` to minimize the focused pane. It disappears and its
+- Press `prefix+m` to minimize the focused pane. It disappears and its
   neighbours take over its space, as if it had been closed.
 - The tab gets a ` ▾` after its name while it has minimized panes, like
   herdr's `Z` for zoom. If you rename the tab, the ` ▾` comes back.
 - The pane moves to a tab named `▾`, kept at the end of the tab bar. Click `▾` to see
   every minimized pane of the workspace; the tab closes by itself when empty.
-- Press `prefix+shift+i` to restore. With one minimized pane in the tab it
+- Press `prefix+shift+m` to restore. With one minimized pane in the tab it
   comes straight back; with several, a picker opens with a live preview of
   each. Type to search by pane name; arrows or `ctrl+j`/`ctrl+k` move, `enter`
   restores, `esc` cancels. Panes come back to their exact place, in any order.
@@ -37,17 +37,18 @@ herdr plugin install MMSs/herdr-minimize
 
 herdr runs plugin actions from key bindings (it has no command palette), so add
 these to your herdr config (`~/.config/herdr/config.toml`) and run
-`herdr server reload-config`:
+`herdr server reload-config`. `prefix+m` / `prefix+shift+m` are free in
+herdr's defaults; pick other keys if you already use them:
 
 ```toml
 [[keys.command]]
-key = "prefix+i"
+key = "prefix+m"
 type = "plugin_action"
 command = "mmss.minimize.minimize"
 description = "minimize pane"
 
 [[keys.command]]
-key = "prefix+shift+i"
+key = "prefix+shift+m"
 type = "plugin_action"
 command = "mmss.minimize.restore"
 description = "restore minimized pane"
