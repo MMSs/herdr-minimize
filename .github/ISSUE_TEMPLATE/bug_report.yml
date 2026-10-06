@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in herdr-minimize doesn't work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Before/after screenshots of the tab help a lot for layout bugs.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Include the tab's pane layout before minimizing (e.g. "3 panes, editor left, two shells stacked right").
+    validations:
+      required: true
+  - type: input
+    id: herdr
+    attributes:
+      label: herdr version
+      description: Output of `herdr --version`
+    validations:
+      required: true
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin version
+      description: Output of `herdr plugin list --plugin mmss.minimize`
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, terminal, and bun version
+      placeholder: macOS 15.5, Ghostty 1.2, bun 1.3.14
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Plugin logs
+      description: Output of `herdr plugin log list --plugin mmss.minimize`, if relevant
+      render: text

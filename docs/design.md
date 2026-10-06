@@ -1,8 +1,9 @@
-# herdr-minimize — product spec
+# Design
 
-Status: design approved in conversation 2026-10-06, not yet implemented.
-Target: herdr 0.9.3+, macOS + Linux. Published as a standalone GitHub repo
-(`MMSs/herdr-minimize`) listed in the herdr plugin marketplace.
+How herdr-minimize works and why. The herdr behaviour it relies on is recorded
+separately, with the herdr version it was verified on, in
+[herdr-api-notes.md](herdr-api-notes.md). Change this document in the same PR
+as any change to the behaviour it describes.
 
 ## 1. Problem
 
@@ -14,10 +15,9 @@ layout, and putting it back by hand never reproduces the original size.
 Upstream has open ideas for this (discussions
 [#1244 stacked panes](https://github.com/herdrdev/herdr/discussions/1244),
 [#4425 multi-pane slots](https://github.com/herdrdev/herdr/discussions/4425))
-but nothing is merged. Rechecked 2026-10-06 against herdr 0.9.3: no native
-minimize/stack/hide, and no community plugin does it.
+but nothing is merged as of herdr 0.9.3.
 
-### Prior art (and why this is different)
+### Prior art
 
 `prabhatCH/herdr-park`, `rrg/herdr-park-agents`, `iviaxpow3r/herdr-session-parker`,
 `haretoke/herdr-agent-parking` and `EzequielAlejandroLastra/herdr-space-parking`
@@ -52,46 +52,26 @@ it comes back to exactly where it was.
    with the usual pane-navigation keys; `j`/`k`/arrows move, `enter` restores,
    `R` restores all. A plugin action "Restore last minimized pane" (suggested
    key `prefix+shift+i`) restores without touching the tray.
-6. **Width.** The tray takes ~10% of the tab width. That is herdr's minimum pane
-   width (verified: 16 cols of a 157-col tab), so the tray can't be narrower
-   than that. Entries truncate to fit.
+6. **Width.** The tray takes ~10% of the tab width, herdr's minimum pane width.
+   Entries truncate to fit.
 
 ### Out of scope (v1)
 
 - Minimizing across tabs/workspaces (the tray is per tab; there is no global list).
 - Minimizing the tray itself, or the last remaining pane of a tab (refuse with a
   notification).
-- Windows support (socket transport differs; herdr plugins can opt in later).
+- Windows (the raw socket transport differs; can be added later).
 - Persisting minimized panes across a full herdr server restart beyond what
-  herdr's own session restore already keeps — see §6.
+  herdr's own session restore already keeps — see R3.
 
-## 3. Verified herdr facts this design depends on
-
-All tested live on herdr 0.9.3 in throwaway workspaces on 2026-10-06.
-
-| Fact | Consequence |
-|---|---|
-| `pane move <id> --new-tab --no-focus` / `--workspace` moves a live pane; pane id **and shell PID survive**. | Minimizing = moving the pane to a parking location. Nothing is killed. |
-| `pane move <id> --tab T --target-pane P --split right\|down --ratio R --no-focus` re-inserts it; `--ratio` is the **existing (target) pane's** share. Only `right`/`down` exist. | Re-insertion primitive. |
-| Socket `layout.export {"pane_id": X}` returns the tab's BSP tree: `split{direction: right\|down, ratio (= first child's share), first, second}` / `pane{pane_id, cwd, label}`. `{"tab_id": …}` returns `layout_not_found` — always pass a `pane_id`. | Record the exact tree position and ratios at minimize time. |
-| **Socket `layout.apply` is destructive**: it treats the tree as a template, closes the target tab (killing its panes) and spawns a brand-new tab with fresh panes. `pane_id` in nodes is ignored. | **Never use `layout.apply`.** Rebuild layouts only with `pane move`. |
-| A pane split only splits that one leaf, never a subtree. | A full-height tray (a root-level split) needs a top-down rebuild (§4.3). |
-| Top-down rebuild works: keep one anchor pane in the tab, stage the rest in a temp tab, then `pane move --target-pane … --split … --ratio …` from the root down. PIDs and the original tab id survive; the temp tab auto-closes when emptied. | Tray insertion/removal and complex restores are feasible without killing anything. |
-| Min pane size ≈10% of tab size in each direction (`pane resize` and `layout.set_split_ratio` clamp there). | Tray width floor; "shrink to a sliver" is not a viable minimize. |
-| `--current` resolves to the **focused** pane, not the caller. Actions get `HERDR_PANE_ID`/`HERDR_TAB_ID` from invocation context. | Always use explicit ids from `HERDR_PLUGIN_CONTEXT_JSON` / env. |
-| herdr's `mouse_capture = true` still forwards mouse to pane apps that request mouse reporting. | Tray can be clickable — **but see open risk R1**. |
-| Plugin panes (`[[panes]]`, placement `split`/`tab`) are normal herdr panes after opening and can be moved; plugin ownership follows the pane. | The tray is a plugin pane entrypoint. |
-| Empty tabs auto-close when their last pane moves out. | Parking/staging tabs clean themselves up; the anchor pane must never leave its tab during a rebuild. |
-
-## 4. Design
-
-### 4.1 Components
+## 3. Components
 
 ```
 herdr-plugin.toml        manifest: actions, tray pane entrypoint, startup hook, events
+scripts/preflight.sh     install-time [[build]] check that bun is present
 src/herdr.ts             thin client: CLI via HERDR_BIN_PATH + raw socket for layout.export/events
 src/tree.ts              pure BSP-tree ops (no I/O): remove leaf, reinsert, wrap with tray, diff
-src/rebuild.ts           turns a target tree into an ordered list of `pane move` calls
+src/rebuild.ts           pure: turns a target tree into an ordered list of `pane move` calls
 src/state.ts             JSON state file in HERDR_PLUGIN_STATE_DIR + lock
 src/actions/minimize.ts  action entrypoint
 src/actions/restore.ts   action entrypoint (restore by id / last / all)
@@ -99,22 +79,24 @@ src/tray.ts              tray TUI (pane entrypoint): render, mouse + keys, live 
 src/startup.ts           reconcile state after server start/handoff
 ```
 
-Language: TypeScript on Bun (no runtime deps; `bun` is already required by
-sessionizer on the author's machine). `tree.ts` and `rebuild.ts` are pure and
-unit-tested with `bun test`; everything with I/O is thin.
+TypeScript run directly by Bun, with no runtime dependencies, so installing
+the plugin needs nothing but `bun`. `tree.ts` and `rebuild.ts` are pure and
+carry the logic; they are unit-tested with `bun test`. Everything with I/O is
+kept thin.
 
-### 4.2 Parking location
+## 4. Behaviour
+
+### 4.1 Parking location
 
 Minimized panes live in one dedicated workspace per session labelled
 `minimized`, one tab per source tab. It is created on first minimize and closed
 when empty. herdr has no API to hide a workspace (upstream idea #4843), so it
-will appear in the sidebar; the tray is the intended UI, and the workspace is
-just storage. Agents in it still report status, trigger notifications and are
+appears in the sidebar; the tray is the intended UI and the workspace is just
+storage. Agents in it still report status, trigger notifications and are
 reachable by the next-agent keys.
 
-### 4.3 Algorithms
+### 4.2 Minimize(pane X in tab T)
 
-**Minimize(pane X in tab T)**
 1. Refuse if X is the tray or the only non-tray pane in T. Unzoom T if zoomed.
 2. `layout.export` → tree. Record entry: `{pane_id, tab_id, minimized_at,
    path, sibling_leaves, direction, ratio, x_was_first}` where `path` is the
@@ -122,10 +104,11 @@ reachable by the next-agent keys.
    in X's sibling subtree, and `ratio` the parent split's ratio.
 3. Move X into the parking tab for T (`--no-focus`).
 4. If T has no tray yet, add it: target tree = `split(right, r_tray, T_tree, tray)`
-   where `r_tray` gives the tray ~10% width; apply via rebuild (below).
+   where `r_tray` gives the tray ~10% width; apply via rebuild.
 5. Focus the pane that inherited X's space (first leaf of the sibling subtree).
 
-**Restore(entry E)**
+### 4.3 Restore(entry E)
+
 1. Current tree of T, excluding the tray: `C`.
 2. Find the smallest subtree of `C` whose leaf set equals `E.sibling_leaves`.
    - Found → replace it with `split(E.direction, E.ratio, X, S)` or
@@ -141,7 +124,8 @@ reachable by the next-agent keys.
    without the tray; otherwise it stays wrapped in the tray split.
 4. Apply via rebuild; focus X; remove E from state; refresh tray.
 
-**Rebuild(tab T, target tree D)**
+### 4.4 Rebuild(tab T, target tree D)
+
 - Fast path: if D differs from the current tree by one leaf being inserted next
   to a single-leaf sibling, or by the tray being removed, do it in one
   `pane move` (+ close the tray pane). This covers most restores.
@@ -152,37 +136,37 @@ reachable by the next-agent keys.
   --split dir --ratio r`, then recurse into A and B. Invariant: each region's
   anchor is the first leaf of its subtree, so no swaps are needed.
 - Every move uses `--no-focus`; focus is set once at the end.
-- Whole operation runs under a lock (`mkdir` lock in the state dir) so two quick
-  key presses can't interleave rebuilds.
+- The whole operation runs under a lock (`mkdir` lock in the state dir) so two
+  quick key presses can't interleave rebuilds.
 
-### 4.4 Tray pane
+### 4.5 Tray pane
 
 - A `[[panes]]` entrypoint `tray`, opened by the minimize action and then
   placed by the rebuild. One tray per tab; its pane id is stored in state.
 - On start: alternate screen, hide cursor, enable SGR mouse reporting
   (`\e[?1000h\e[?1006h`), handle `SIGWINCH`.
-- Data: reads state file; subscribes to socket events (`pane.agent_status_changed`,
-  `pane.closed`, `pane.exited`, `pane.moved`, `tab.closed`) to re-render, with
-  a slow poll (2 s) as fallback.
+- Data: reads the state file; subscribes to socket events
+  (`pane.agent_status_changed`, `pane.closed`, `pane.exited`, `pane.moved`,
+  `tab.closed`) to re-render, with a slow poll (2 s) as fallback.
 - Click on an entry row → runs restore for that entry (same code path as the
   action). Keys as in §2.5.
-- Declines agent detection: report nothing; label the pane `minimized` so it
+- Declines agent detection: reports nothing; labels its pane `minimized` so it
   is recognisable in pickers.
 
-### 4.5 Events and lifecycle
+### 4.6 Events and lifecycle
 
 - `pane.closed` / `pane.exited` for a minimized pane → drop its entry; close
   the tray if it was the last one for that tab.
 - `tab.closed` for a tab with minimized panes → leave them in the parking
   workspace and keep the entries; restore then uses the "tab gone" fallback.
 - User manually closes the tray pane → treat as "restore all" for that tab
-  (least surprising: nothing becomes unreachable).
+  (nothing becomes unreachable).
 - User manually moves a pane out of the parking workspace → drop its entry on
   next reconcile.
 
-### 4.6 State file
+### 4.7 State file
 
-`$HERDR_PLUGIN_STATE_DIR/state.json`:
+`$HERDR_PLUGIN_STATE_DIR/state.json`, written atomically (temp file + rename):
 
 ```json
 {
@@ -201,18 +185,16 @@ reachable by the next-agent keys.
 }
 ```
 
-Write atomically (temp file + rename).
+Bump `version` and migrate on read whenever the shape changes; users upgrade
+with minimized panes in flight.
 
-## 5. Manifest sketch
+## 5. Planned manifest entrypoints
+
+Add each to `herdr-plugin.toml` only once its script exists (the manifest test
+enforces this). Verify `contexts` values and event names against the installed
+herdr's plugin docs before relying on them.
 
 ```toml
-id = "minimize"
-name = "Minimize"
-version = "0.1.0"
-min_herdr_version = "0.9.3"
-description = "Minimize panes to a clickable tray and restore them to their exact place"
-platforms = ["macos", "linux"]
-
 [[startup]]
 command = ["bun", "src/startup.ts"]
 
@@ -239,36 +221,19 @@ on = "pane.closed"
 command = ["bun", "src/startup.ts", "--reconcile"]
 ```
 
-Verify `contexts` values and event names against `herdr plugin` docs for the
-installed version before relying on them. User config (README):
-
-```toml
-[[keys.command]]
-key = "prefix+i"
-type = "plugin_action"
-command = "minimize.minimize"
-description = "minimize pane"
-
-[[keys.command]]
-key = "prefix+shift+i"
-type = "plugin_action"
-command = "minimize.restore-last"
-description = "restore last minimized pane"
-```
-
 ## 6. Open risks — spike these first
 
 - **R1: first click on an unfocused tray.** Unverified whether herdr forwards
   that click to the pane app or only uses it to focus the pane. If it only
   focuses, either accept "click to focus, click to restore", or restore the
   selected entry when the tray gains focus via a mouse click (needs focus-in
-  reporting `\e[?1004h`). Test this in the first hour, before the rest.
+  reporting `\e[?1004h`).
 - **R2: rebuild flicker.** The general-path rebuild reflows every pane in the
   tab for a moment (nvim/lazygit redraw). Measure; if bad, prefer the fast
   path more aggressively and only do a full rebuild when the tray is added.
-- **R3: server restart.** Unverified whether pane ids survive a herdr
-  server restart/handoff. Startup reconcile must match entries to panes
-  defensively and drop anything that can't be matched, never guess.
+- **R3: server restart.** Unverified whether pane ids survive a herdr server
+  restart/handoff. Startup reconcile must match entries to panes defensively
+  and drop anything that can't be matched, never guess.
 - **R4: tray width on narrow terminals.** 10% of a narrow tab is very few
   columns; fall back to a glyph-only layout (status glyph + first letter)
   under ~10 columns.
@@ -287,24 +252,5 @@ description = "restore last minimized pane"
 6. Closing a minimized pane's process removes its entry; closing the tray
    restores everything.
 7. Rapid repeated minimize/restore presses never leave a pane stranded (lock).
-8. Headless tests: everything above runs against `herdr workspace create
-   --no-focus` workspaces created and torn down by the test, never the user's
-   real tabs.
-
-## 8. Publishing
-
-- Repo `MMSs/herdr-minimize`, manifest at the repo root, MIT licence.
-- GitHub topic `herdr-plugin` → indexed by the marketplace within ~30 minutes.
-- Install line for README: `herdr plugin install MMSs/herdr-minimize`.
-- README: what it does, GIF of minimize → tray → click restore, the keybinding
-  snippet, requirements (`bun`), and how it differs from the "park" plugins.
-
-## 9. Testing notes for the implementing session
-
-- Raw socket client (newline-delimited JSON): connect to `HERDR_SOCKET_PATH`,
-  send `{"id", "method", "params"}` + `\n`, read one line.
-- Shell gotcha in zsh test scripts: `$W:t1` is a history modifier — write `${W}:t1`.
-- `herdr pane process-info --pane X | jq .result.process_info.shell_pid` is
-  the stable PID to compare (other pid fields churn).
-- `herdr pane report-agent <pane> --source test --agent claude --state working`
-  fakes an agent for tray-status tests.
+8. Live tests run only against `herdr workspace create --no-focus` workspaces
+   created and torn down by the test, never the user's real tabs.
