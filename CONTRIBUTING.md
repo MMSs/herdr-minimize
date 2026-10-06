@@ -70,15 +70,37 @@ test by hand and follow these rules:
 
 ## Pull requests
 
+`main` is protected: every change lands through a pull request, squash-merged,
+with CI and the PR-title check green. Nobody pushes to `main` directly.
+
+**The PR title is the release note and decides the version.** Use a
+[Conventional Commit](https://www.conventionalcommits.org/) title:
+
+| Title | Release when merged |
+|---|---|
+| `fix: …`, `perf: …` | patch (0.1.0 → 0.1.1) |
+| `feat: …` | minor (0.1.0 → 0.2.0) |
+| `feat!: …`, or a `BREAKING CHANGE:` line in the description | major (before 1.0 this bumps the minor) |
+| `docs:`, `refactor:`, `test:`, `ci:`, `chore:` | none |
+
+A scope is optional (`fix(picker): keep selection on refresh`). We use titles
+rather than labels because the title is checked automatically, ends up in the
+git history as the squash commit, and becomes the changelog line, so there is
+no separate step to forget.
+
+When the PR is merged, the release workflow bumps the version in
+`herdr-plugin.toml` and `package.json`, adds the changelog entry, tags
+`vX.Y.Z` and publishes a GitHub release. Don't edit the version or
+`CHANGELOG.md` yourself.
+
+Also:
+
 - Keep each PR to one change. Include tests for logic changes and say in the
   description how you verified anything tested by hand.
 - `bun run check` must pass.
-- Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for
-  anything a user would notice.
 - Update `docs/design.md` in the same PR when you change behaviour it
   describes.
-- Commit messages: short imperative subject line (`fix restore focus after rebuild`),
-  with a body explaining why when it isn't obvious.
+- Commits inside the PR can be anything; only the PR title is kept.
 
 ## Using a coding agent
 

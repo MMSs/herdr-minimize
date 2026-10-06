@@ -44,8 +44,11 @@ Module map: `tree` (pure layout tree + full-layout bookkeeping), `rebuild`
   Call herdr via `HERDR_BIN_PATH`, never a bare `herdr` from `PATH`.
 - Durable state goes in `HERDR_PLUGIN_STATE_DIR`, never `HERDR_PLUGIN_ROOT`
   (installed roots are managed checkouts that reinstall replaces).
-- Behaviour changes update `docs/design.md` in the same change; user-visible
-  changes get a `CHANGELOG.md` line under `[Unreleased]`.
+- Behaviour changes update `docs/design.md` in the same change.
+- `main` is protected: work on a branch and open a PR. The PR title is a
+  Conventional Commit (`fix:` patch, `feat:` minor, `feat!:` major, `docs:`/
+  `chore:`/… none) and drives the automatic release; never edit versions or
+  `CHANGELOG.md` by hand.
 
 ## herdr pitfalls (verified; details in docs/herdr-api-notes.md)
 
@@ -71,6 +74,6 @@ on the user's focused tab, so tests call `src/ops.ts` with sandbox ids instead.
 
 ## Releasing
 
-Use the `release` skill; the steps are in `docs/RELEASING.md`. The
+Automatic on merge; see the `release` skill and `docs/RELEASING.md`. The
 `herdr-plugin` topic (marketplace listing) is added only with the first
 working release.
