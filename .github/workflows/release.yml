@@ -20,10 +20,12 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      # Never the PR head: this job can push to main.
+      # Never the PR head: this job can push to main. The deploy key is the
+      # only identity allowed past main's ruleset (docs/RELEASING.md).
       - uses: actions/checkout@v7
         with:
           ref: main
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
       - uses: oven-sh/setup-bun@v2
       - id: bump
         # Title and body arrive through env, never interpolated into the script.

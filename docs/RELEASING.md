@@ -15,8 +15,16 @@ or a pinned tag (`--ref v0.2.0`), so `main` must always be installable.
 
 A repository ruleset on the default branch requires a pull request (squash
 merge only), the CI checks and the `pr-title` check, and blocks force pushes
-and deletion. Only the GitHub Actions app may bypass it, so the release
-workflow can push its version commit and tag.
+and deletion. Its only bypass is the repository's write deploy key
+"release workflow", whose private half is the `RELEASE_DEPLOY_KEY` Actions
+secret: the release workflow checks out with it, so it can push the version
+commit and tag. (GitHub doesn't allow the GitHub Actions app as a bypass on
+personal repositories.)
+
+To rotate the key: generate a new ed25519 pair, add the public half with
+`gh repo deploy-key add <pub> --allow-write`, store the private half with
+`gh secret set RELEASE_DEPLOY_KEY < <key>`, delete the old deploy key and the
+local files, then update the ruleset's bypass list to the new key.
 
 ## Before merging a `feat:` or `fix:` PR
 
