@@ -32,6 +32,11 @@ P3=$($H pane split "$P2" --direction down --ratio 0.6 --no-focus | jq -r .result
 $H workspace close "$W"
 ```
 
+A new pane's shell needs a moment to start; text sent before its prompt is
+ready is echoed but never runs. Use `$H pane run P '<cmd>'` and then
+`$H pane wait-output P --regex '<expected>' --timeout 5000` instead of fixed
+sleeps.
+
 `workspace create` prints the new workspace, its first tab (`${W}:t1`) and its
 root pane. Every command prints JSON; read ids with `jq`.
 

@@ -19,7 +19,13 @@ status and send notifications while minimized. That is the difference from the
 - A narrow tray column appears on the right of that tab, listing its minimized
   panes with their agent status. Blocked agents stand out.
 - Click an entry (or focus the tray and press `enter`) to put the pane back
-  where it was. `R` restores all. `prefix+shift+i` restores the last one.
+  where it was. `R` restores all.
+- Or press `prefix+shift+i` (**Restore pane**). With one minimized pane in the
+  tab it comes straight back; with several, a picker opens with a live preview
+  of each. Type to search by pane name; arrows or `ctrl+j`/`ctrl+k` move,
+  `enter` restores, `esc` cancels.
+- Everything acts on the tab you're looking at. Minimizing the only pane in a
+  tab just shows a notification.
 - When the last pane is restored the tray disappears and the tab is back to its
   original layout.
 
@@ -47,8 +53,8 @@ description = "minimize pane"
 [[keys.command]]
 key = "prefix+shift+i"
 type = "plugin_action"
-command = "mmss.minimize.restore-last"
-description = "restore last minimized pane"
+command = "mmss.minimize.restore"
+description = "restore minimized pane"
 ```
 
 Update by running the install command again. Remove with

@@ -45,8 +45,10 @@ Status: scaffolding only. No `src/` yet; `docs/design.md` is the plan.
 - `layout.export` needs `{"pane_id": …}`; `{"tab_id": …}` → `layout_not_found`.
 - `pane move --ratio R`: R is the existing target pane's share. Only
   `right`/`down` splits exist. In exported trees, `ratio` is the first child's share.
-- `--current` is the *focused* pane, not the caller — use ids from
-  `HERDR_PLUGIN_CONTEXT_JSON` / `HERDR_PANE_ID` / `HERDR_TAB_ID`.
+- Every entrypoint works on the **active tab only**, resolved with
+  `herdr pane current --current` (the focused pane and its `tab_id`; design
+  §4.0). Context ids are only a cross-check. Never act on any other tab
+  except the plugin's own parking workspace.
 - Tabs auto-close when their last pane leaves: the rebuild anchor must never
   leave its tab.
 - Min pane size is ~10% of the tab per axis.

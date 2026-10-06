@@ -22,9 +22,12 @@ rather than trusting memory.
 
 | Fact | Consequence for the plugin |
 |---|---|
-| `--current` resolves to the **focused** pane, not the caller. Actions get `HERDR_PANE_ID` / `HERDR_TAB_ID` from invocation context. | Always use explicit ids from `HERDR_PLUGIN_CONTEXT_JSON` / env. |
+| `--current` resolves to the **focused** pane, not the caller. `herdr pane current --current` returns that pane with its `tab_id`. Actions also get `HERDR_PANE_ID` / `HERDR_TAB_ID` from invocation context. | `pane current --current` is how every entrypoint finds the active tab (design §4.0); context ids are only a cross-check. Never use `--current` for anything else. |
+| `herdr notification show <title> [--body TEXT]` shows a herdr notification. | Used for refusals (only pane in tab, nothing to restore). |
 | `mouse_capture = true` still forwards mouse events to pane apps that request mouse reporting. | The tray can be clickable (but see risk R1 in [design.md](design.md#6-open-risks--spike-these-first)). |
 | Plugin panes (`[[panes]]`, placement `split`/`tab`) are normal panes after opening and can be moved; plugin ownership follows the pane. | The tray is a plugin pane entrypoint. |
+| `herdr pane read <id> --source visible --format ansi` returns the pane's current screen with colour escapes as plain text (not JSON), and works on a pane that has been moved to another tab. | Source for the restore picker's live preview. |
+| Popup panes (`placement = "popup"`, `width`/`height` as cells or `"80%"`) are session-modal, take all input including Escape, have no pane id, emit no pane events, and don't get `HERDR_PANE_ID`. Opening one returns `ui_busy` while another herdr modal is up. *(From herdr's plugin docs; not yet verified live.)* | The restore picker is a popup; the tab it acts on is handed over through state. |
 | `herdr plugin link <path> [--disabled]` — the path comes **before** options; `link --disabled <path>` fails with `unknown option`. `link` does not run `[[build]]`; `install` does. | Contributors link their checkout; run `sh scripts/preflight.sh` by hand to exercise the build step. |
 | Runtime commands run from the plugin root with no shell. Build commands get no runtime env or socket. | Manifest commands are argv arrays of repo-relative paths. |
 
