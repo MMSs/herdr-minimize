@@ -44,14 +44,22 @@ simply isn't in the tab any more, and nothing takes its place.
    bar. herdr closes it by itself once it is empty. Clicking it shows every
    minimized pane of that workspace tiled, so they can be glanced at; they
    keep running, and agents in them keep reporting status and notifying.
-3. **Restore.** A plugin action "Restore pane" (suggested key
+3. **Tab marker.** While a tab has minimized panes its name ends in ` ▾`
+   (`agent ▾`), like herdr's `Z` for a zoomed tab. herdr has no plugin-drawn
+   tab markers, so the marker is part of the tab's label: the reconcile hook
+   runs on `tab.renamed` and puts it back if the user renames the tab and
+   drops it. The last restore removes it, leaving the label as it was. (A
+   numbered tab keeps its number as a fixed name afterwards; herdr can't reset
+   a label to automatic numbering.) herdr's rename prompt is pre-filled with
+   the current label including ` ▾`; plugins can't change that prompt.
+4. **Restore.** A plugin action "Restore pane" (suggested key
    `prefix+shift+i`) only looks at the current tab's minimized panes:
    - none → a notification says there is nothing to restore;
    - exactly one → that pane is restored straight away;
    - more than one → a **restore picker** opens (§4.4) so the user chooses.
    A restored pane goes back to its original position at its original size,
    and is focused. Panes come back exactly in any order.
-4. **Closing.** Closing a tab also closes the panes minimized from it. A
+5. **Closing.** Closing a tab also closes the panes minimized from it. A
    minimized pane whose process exits is simply forgotten.
 
 ### Out of scope (v1)
@@ -76,6 +84,7 @@ src/herdr.ts             thin client: CLI via HERDR_BIN_PATH + raw socket for la
 src/tree.ts              pure BSP-tree ops: remove/reinsert leaves, full layout bookkeeping
 src/rebuild.ts           pure: turns current + target tree into ordered herdr steps
 src/state.ts             JSON state file in HERDR_PLUGIN_STATE_DIR + lock
+src/marker.ts            pure: the " ▾" tab-name marker
 src/entries.ts           pure: display names, status glyphs, fuzzy search
 src/tui/term.ts          raw-mode terminal: input parsing, ANSI-aware clipping
 src/tui/render.ts        pure frame builder for the picker
@@ -201,13 +210,14 @@ input and leaves the tiled layout alone.
 ### 4.6 Events and lifecycle
 
 All handled by one hook (`src/hooks/reconcile.ts`), run at startup and on
-`pane.closed`, `tab.closed` and `tab.created`:
+`pane.closed`, `tab.closed`, `tab.created` and `tab.renamed`:
 
 - A minimized pane that exited, or that the user moved out of the `▾` tab, is
   forgotten.
 - When a source tab no longer exists, its minimized panes are **closed**.
 - A `▾` tab that no longer exists is forgotten; the next minimize creates one.
 - Every `▾` tab is moved back to the end of its tab bar.
+- Every source tab's ` ▾` marker matches whether it still has minimized panes.
 
 ### 4.7 State file
 

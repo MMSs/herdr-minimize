@@ -41,6 +41,11 @@ command = ["bun", "src/hooks/reconcile.ts"]
 on = "tab.created"
 command = ["bun", "src/hooks/reconcile.ts"]
 
+# Puts the ▾ back if the user renames a tab that has minimized panes.
+[[events]]
+on = "tab.renamed"
+command = ["bun", "src/hooks/reconcile.ts"]
+
 [[panes]]
 id = "picker"
 title = "Restore pane"

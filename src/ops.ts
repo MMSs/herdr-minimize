@@ -3,6 +3,7 @@
 
 import { displayName, toView, type View } from "./entries";
 import { herdr, type PaneInfo } from "./herdr";
+import { marked, unmarked } from "./marker";
 import { planRebuild, type Step } from "./rebuild";
 import { type Entry, loadState, type State, saveState, tabState, withLock } from "./state";
 import { fromExport, fullLayout, type Hidden, removeAll, removeLeaf, type Tree } from "./tree";
@@ -113,6 +114,13 @@ async function refreshSizes(tab: string): Promise<void> {
   herdr.zoomOff(pane);
 }
 
+/** Adds or removes the " ▾" after a source tab's name (src/marker.ts). */
+function markTab(tab: string, on: boolean): void {
+  const label = herdr.tabLabel(tab);
+  const next = on ? marked(label) : unmarked(label);
+  if (next !== label) herdr.renameTab(tab, next);
+}
+
 /**
  * The invariant every entry must hold: its pane is alive and sits in a ▾ tab.
  * Panes that exited or were moved back by hand fail it and are no longer
@@ -186,6 +194,7 @@ export async function minimize(ctx: Ctx): Promise<void> {
       was_first: removal.wasFirst,
     });
     saveState(state);
+    markTab(ctx.tab, true);
     await refreshSizes(ctx.tab);
   });
   await keepParkingLast();
@@ -224,6 +233,7 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     ts.layout = full;
     if (ts.entries.length === 0) delete state.tabs[tab];
     saveState(state);
+    markTab(tab, ts.entries.length > 0);
     await refreshSizes(tab);
   });
 }
@@ -263,6 +273,8 @@ export async function reconcile(): Promise<{ closed: number }> {
           ts.entries = [];
         }
         if (ts.entries.length === 0) delete state.tabs[tab];
+        // Keep the ▾ in step with the entries, also after the user renamed the tab.
+        if (liveTabs.has(tab)) markTab(tab, ts.entries.length > 0);
       }
       for (const [workspace, tab] of Object.entries(state.parking)) {
         if (!liveTabs.has(tab)) delete state.parking[workspace];

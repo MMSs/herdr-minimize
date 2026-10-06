@@ -11,7 +11,9 @@ status and send notifications while minimized. That is the difference from the
 
 - Press `prefix+i` to minimize the focused pane. It disappears and its
   neighbours take over its space, as if it had been closed.
-- It moves to a tab named `▾`, kept at the end of the tab bar. Click `▾` to see
+- The tab gets a ` ▾` after its name while it has minimized panes, like
+  herdr's `Z` for zoom. If you rename the tab, the ` ▾` comes back.
+- The pane moves to a tab named `▾`, kept at the end of the tab bar. Click `▾` to see
   every minimized pane of the workspace; the tab closes by itself when empty.
 - Press `prefix+shift+i` to restore. With one minimized pane in the tab it
   comes straight back; with several, a picker opens with a live preview of

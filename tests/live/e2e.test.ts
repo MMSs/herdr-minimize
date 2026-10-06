@@ -250,4 +250,30 @@ describe.skipIf(!LIVE)("live herdr", () => {
     await restoreEntry(tab, terminalOf(b));
     expect((await herdr.exportLayout(c)).focused_pane_id).toBe(b);
   }, 60_000);
+
+  test("a tab with minimized panes shows ▾ after its name until the last restore", async () => {
+    const { ws, tab, root } = sandbox();
+    cli(["tab", "rename", tab, "work"]);
+    const [, b, c] = layouts[1]![1](root) as [string, string, string];
+    const label = () => tabsOf(ws).find((t) => t.tab_id === tab)!.label;
+    await minimize({ tab, pane: b });
+    expect(label()).toBe("work ▾");
+    await minimize({ tab, pane: c });
+    expect(label()).toBe("work ▾");
+    await restoreEntry(tab, terminalOf(c));
+    expect(label()).toBe("work ▾"); // one still minimized
+    await restoreEntry(tab, terminalOf(b));
+    expect(label()).toBe("work");
+    expect(tabsOf(ws).at(-1)!.label).not.toBe("▾ ▾"); // the parking tab is never marked
+  }, 60_000);
+
+  test("renaming a tab with minimized panes keeps the ▾", async () => {
+    const { ws, tab, root } = sandbox();
+    await minimize({ tab, pane: splitPane(root, "right") });
+    cli(["tab", "rename", tab, "renamed"]);
+    await reconcile(); // herdr's tab.renamed hook does the same
+    expect(tabsOf(ws).find((t) => t.tab_id === tab)!.label).toBe("renamed ▾");
+    await restoreAll(tab);
+    expect(tabsOf(ws).find((t) => t.tab_id === tab)!.label).toBe("renamed");
+  }, 60_000);
 });
