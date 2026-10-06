@@ -4,7 +4,8 @@ import { herdr } from "./herdr";
 import { liveViews, reconcile, restoreAll, restoreEntry } from "./ops";
 import { runEntrypoint } from "./run";
 import { loadState } from "./state";
-import { renderTray } from "./tui/render";
+import { detectReplies, KITTY_CLEAR, KITTY_PROBE, kittyImage } from "./tui/kitty";
+import { type CellSize, renderTray } from "./tui/render";
 import { parseInput, Screen } from "./tui/term";
 
 const GRACE_MS = 5_000;
@@ -21,6 +22,8 @@ await runEntrypoint(async () => {
   let rowToEntry: (number | null)[] = [];
   let busy = false;
   let emptyTicks = 0;
+  let cell: CellSize | null = null;
+  let shown = "";
 
   const ownTab = () => {
     for (const [t, ts] of Object.entries(loadState().tabs))
@@ -29,9 +32,24 @@ await runEntrypoint(async () => {
   };
   const draw = () => {
     const { cols, rows } = screen.size();
-    const frame = renderTray(views, selected, cols, rows);
+    const frame = renderTray(views, selected, cols, rows, cell);
     rowToEntry = frame.rowToEntry;
+    // Re-sending images every tick would flicker; only redraw on change.
+    const key = JSON.stringify([
+      frame.lines,
+      frame.images.map((im) => [im.row, im.rows, im.label]),
+    ]);
+    if (key === shown) return;
+    shown = key;
+    process.stdout.write(KITTY_CLEAR);
     screen.draw(frame.lines);
+    // Each image is opaque and covers the stacked letters below it; terminals
+    // without kitty graphics never show it and keep the letters.
+    for (const im of frame.images) {
+      process.stdout.write(
+        `\x1b[${im.row + 1};${im.col + 1}H${kittyImage(im.rgba, im.width, im.height, im.cols, im.rows)}`,
+      );
+    }
   };
   const refresh = async () => {
     if (busy) return;
@@ -59,10 +77,20 @@ await runEntrypoint(async () => {
   };
 
   screen.start();
-  process.on("exit", () => screen.stop());
-  process.stdout.on("resize", draw);
+  process.stdout.write(KITTY_PROBE);
+  process.on("exit", () => {
+    process.stdout.write(KITTY_CLEAR);
+    screen.stop();
+  });
+  process.stdout.on("resize", () => {
+    process.stdout.write(KITTY_PROBE); // cell size may change with the font
+    draw();
+  });
   process.stdin.on("data", (data) => {
-    for (const key of parseInput(data.toString())) {
+    const text = data.toString();
+    const size = detectReplies(text);
+    if (size && (size.cellW !== cell?.cellW || size.cellH !== cell?.cellH)) cell = size;
+    for (const key of parseInput(text)) {
       if (key.kind === "mouse") {
         if (key.release) continue;
         if (key.button === 64) selected = Math.max(0, selected - 1);

@@ -29,6 +29,9 @@ describe("parseInput", () => {
       { kind: "mouse", button: 65, x: 1, y: 1, release: false },
     ]);
   });
+  test("terminal replies (kitty APC, window ops) are not read as keys", () => {
+    expect(parseInput("\x1b_Gi=31;OK\x1b\\\x1b[6;34;16tj")).toEqual([{ kind: "char", ch: "j" }]);
+  });
   test("focus reports and unknown CSI are ignored", () => {
     expect(parseInput("\x1b[I\x1b[O\x1b[2~")).toEqual([]);
   });

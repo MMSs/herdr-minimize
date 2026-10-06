@@ -18,6 +18,7 @@ export type Key =
   | { kind: "mouse"; button: number; x: number; y: number; release: boolean };
 
 const MOUSE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/;
+const APC = /^\x1b_[^\x1b]*\x1b\\/;
 const CSI = /^\x1b[[O]([0-9;?]*)([A-Za-z~])/;
 const ESCAPE = /^\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/;
 const CONTROL: Record<string, Key["kind"]> = {
@@ -36,6 +37,11 @@ export function parseInput(data: string): Key[] {
   while (i < data.length) {
     const rest = data.slice(i);
     if (rest[0] === "\x1b") {
+      const apc = APC.exec(rest);
+      if (apc) {
+        i += apc[0].length; // terminal replies such as kitty graphics acks
+        continue;
+      }
       const m = MOUSE.exec(rest);
       if (m) {
         keys.push({
