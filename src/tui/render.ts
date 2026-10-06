@@ -7,21 +7,37 @@ export const PREVIEW_MIN_COLS = 60;
 const DIM = (s: string) => `\x1b[2m${s}\x1b[22m`;
 const REVERSE = "\x1b[7m";
 
+/**
+ * The tray as boxed vertical tabs: status mark on top, then the name one
+ * letter per row. Names share the height evenly; tabs that don't fit at all
+ * collapse into a "+N" marker.
+ */
 export function renderTray(views: View[], selected: number, cols: number, rows: number) {
-  const compact = cols < 10;
   const lines: string[] = [];
   const rowToEntry: (number | null)[] = [];
-  const push = (text: string, entry: number | null, sel = false) => {
-    lines.push((sel ? REVERSE : "") + clipAnsi(text, cols));
+  const push = (text: string, entry: number | null) => {
+    lines.push(clipAnsi(text, cols));
     rowToEntry.push(entry);
   };
-  if (!compact) push(DIM("minimized"), null);
-  views.forEach((v, i) => {
-    const sel = i === selected;
-    const name = v.status === "blocked" ? `\x1b[1m${v.name}\x1b[22m` : v.name;
-    push(`${glyph(v.status)} ${compact ? v.name.slice(0, 1) : name}`, i, sel);
-    if (!compact && v.cwd) push(`  ${DIM(v.cwd)}`, i, sel);
-  });
+  const n = views.length;
+  const letters = Math.max(1, Math.floor((rows - n * 4) / Math.max(1, n)));
+  for (let i = 0; i < n; i++) {
+    const v = views[i] as View;
+    const chars = [...v.name].map((ch) => (Bun.stringWidth(ch) === 1 ? ch : "·"));
+    const label = chars.length > letters ? [...chars.slice(0, letters - 1), "…"] : chars;
+    const last = i === n - 1;
+    if (lines.length + label.length + 3 > (last ? rows : rows - 2)) {
+      push(DIM(`+${n - i}`), null);
+      break;
+    }
+    const on = (s: string) => (i === selected ? `${REVERSE}${s}\x1b[27m` : s);
+    const strong = (s: string) => (v.status === "blocked" ? `\x1b[1m${s}\x1b[22m` : s);
+    push("╭─╮", i);
+    push(`│${on(glyph(v.status))}│`, i);
+    for (const ch of label) push(`│${on(strong(ch))}│`, i);
+    push("╰─╯", i);
+    if (!last) push("", null);
+  }
   while (lines.length < rows) push("", null);
   return { lines: lines.slice(0, rows), rowToEntry: rowToEntry.slice(0, rows) };
 }

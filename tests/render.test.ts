@@ -13,29 +13,49 @@ const v = (name: string, cwd: string | null = "proj", status: View["status"] = "
 });
 
 describe("renderTray", () => {
-  test("two lines per entry with the cwd, mapped back to entries", () => {
-    const { lines, rowToEntry } = renderTray([v("zsh"), v("claude", "api", "blocked")], 0, 20, 10);
-    expect(lines.map(stripAnsi).map((l) => l.trimEnd())).toEqual([
-      "minimized",
-      "○ zsh",
-      "  proj",
-      "▲ claude",
-      "  api",
+  const plain = (lines: string[]) => lines.map(stripAnsi).map((l) => l.trimEnd());
+
+  test("each entry is a boxed vertical tab: status mark, then the name one letter per row", () => {
+    const { lines, rowToEntry } = renderTray([v("zsh"), v("ai", "x", "blocked")], -1, 16, 14);
+    expect(plain(lines)).toEqual([
+      "╭─╮",
+      "│○│",
+      "│z│",
+      "│s│",
+      "│h│",
+      "╰─╯",
       "",
-      "",
-      "",
+      "╭─╮",
+      "│▲│",
+      "│a│",
+      "│i│",
+      "╰─╯",
       "",
       "",
     ]);
-    expect(rowToEntry.slice(0, 5)).toEqual([null, 0, 0, 1, 1]);
-    expect(lines.every((l) => Bun.stringWidth(stripAnsi(l)) === 20)).toBe(true);
+    expect(rowToEntry).toEqual([0, 0, 0, 0, 0, 0, null, 1, 1, 1, 1, 1, null, null]);
+    expect(lines.every((l) => Bun.stringWidth(stripAnsi(l)) === 16)).toBe(true);
   });
-  test("selected entry is reverse video", () => {
-    expect(renderTray([v("zsh")], 0, 20, 4).lines[1]).toStartWith("\x1b[7m");
+
+  test("long names are cut with an ellipsis so every tab fits", () => {
+    const { lines } = renderTray([v("abcdefghij"), v("klmnopqrst")], -1, 16, 12);
+    // (12 rows - 2 tabs × 4 rows of chrome) / 2 tabs = 2 letter rows each
+    expect(plain(lines).slice(0, 5)).toEqual(["╭─╮", "│○│", "│a│", "│…│", "╰─╯"]);
   });
-  test("glyph + initial under 10 columns, no header or cwd", () => {
-    const { lines } = renderTray([v("zsh"), v("claude")], -1, 6, 3);
-    expect(lines.map(stripAnsi).map((l) => l.trimEnd())).toEqual(["○ z", "○ c", ""]);
+
+  test("tabs that don't fit collapse into a +N marker", () => {
+    const { lines, rowToEntry } = renderTray([v("ab"), v("cd"), v("ef")], -1, 16, 8);
+    expect(plain(lines)).toEqual(["╭─╮", "│○│", "│…│", "╰─╯", "", "+2", "", ""]);
+    expect(rowToEntry[5]).toBeNull();
+  });
+
+  test("the selected tab is reverse video", () => {
+    const { lines } = renderTray([v("zsh")], 0, 16, 6);
+    expect(lines[2]).toContain("\x1b[7mz");
+  });
+
+  test("wide characters are replaced so the box stays aligned", () => {
+    expect(plain(renderTray([v("a🙂")], -1, 16, 6).lines)[3]).toBe("│·│");
   });
 });
 
