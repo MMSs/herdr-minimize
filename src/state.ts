@@ -95,12 +95,3 @@ export async function withLock<T>(fn: () => Promise<T>, opts: LockOptions = {}):
     rmdirSync(lock);
   }
 }
-
-/** Text for the optional right-aligned tab bar entry, per source tab. */
-export function statusTexts(state: State): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(state.tabs)
-      .filter(([, ts]) => ts.entries.length > 0)
-      .map(([tab, ts]) => [tab, `▾ ${ts.entries.length}`]),
-  );
-}

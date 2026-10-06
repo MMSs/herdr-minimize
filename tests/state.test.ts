@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { emptyState, loadState, saveState, statusTexts, tabState, withLock } from "../src/state";
+import { emptyState, loadState, saveState, tabState, withLock } from "../src/state";
 
 let dir: string;
 beforeEach(() => {
@@ -80,21 +80,5 @@ describe("state", () => {
     await expect(withLock(async () => "never", { dir, timeoutMs: 200 })).rejects.toThrow(
       /timed out/,
     );
-  });
-
-  test("status text per tab is the ▾ mark and its count", () => {
-    const s = emptyState();
-    const entry = {
-      terminal_id: "t",
-      name: "n",
-      minimized_at: "x",
-      siblings: [],
-      dir: "right" as const,
-      ratio: 0.5,
-      was_first: false,
-    };
-    tabState(s, "w1:t1").entries.push(entry, { ...entry, terminal_id: "u" });
-    tabState(s, "w1:t2");
-    expect(statusTexts(s)).toEqual({ "w1:t1": "▾ 2" });
   });
 });

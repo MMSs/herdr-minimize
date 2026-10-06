@@ -178,8 +178,8 @@ describe.skipIf(!LIVE)("live herdr", () => {
     const victim = splitPane(p, "right");
     await minimize({ tab: t2, pane: victim });
     cli(["tab", "close", t2]);
-    const result = await reconcile();
-    expect(result.closed).toBe(1);
+    // herdr's own tab.closed hook may get there first; either way the pane goes.
+    await reconcile();
     expect(herdr.listPanes().some((q) => q.pane_id === victim)).toBe(false);
     expect(loadState().tabs[t2]).toBeUndefined();
     expect(tabPanes(cli(["pane", "get", root]).pane.tab_id)).toHaveLength(1);

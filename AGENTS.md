@@ -5,13 +5,20 @@ this file; edit this one.
 
 ## What this is
 
-A herdr plugin (herdr 0.9.3+, macOS + Linux) that minimizes a pane to a
-per-tab tray column and restores it to its exact original position and size.
+A herdr plugin (herdr 0.9.3+, macOS + Linux) that minimizes a pane into a
+per-workspace `▾` tab and restores it to its exact original position and size.
 The pane's process keeps running untouched; this is *not* a "park"/suspend
 plugin. Plugin id `mmss.minimize`, manifest `herdr-plugin.toml` at the repo
 root, installed by users with `herdr plugin install MMSs/herdr-minimize`.
 
-Status: scaffolding only. No `src/` yet; `docs/design.md` is the plan.
+Status: v0.1 implemented. `docs/design.md` describes the behaviour; keep it in
+sync.
+
+Module map: `tree` (pure layout tree + full-layout bookkeeping), `rebuild`
+(pure: plans herdr moves), `state` (state file, lock), `herdr`
+(CLI/socket client), `entries` (names, glyphs, fuzzy search), `tui/term` +
+`tui/render` (terminal I/O, picker frames), `ops` (minimize/restore/reconcile),
+`picker` (popup), `actions/*`, `hooks/reconcile`.
 
 ## Commands
 
@@ -19,6 +26,8 @@ Status: scaffolding only. No `src/` yet; `docs/design.md` is the plan.
 - `bun run check` — typecheck + lint + tests; CI runs exactly this.
 - `bun test` / `bun test tests/manifest.test.ts` / `bun test -t "<name>"`.
 - `bun run format` — Biome autofix.
+- `bun run test:live` — end-to-end tests against the running herdr in
+  throwaway workspaces; needs this checkout linked as `mmss.minimize`.
 - `herdr plugin link "$PWD"` (path before options) / `herdr plugin unlink mmss.minimize`.
 
 ## Rules
@@ -57,8 +66,8 @@ Status: scaffolding only. No `src/` yet; `docs/design.md` is the plan.
 
 Use the `herdr-live-testing` skill (`.claude/skills/`). Short version: only
 throwaway workspaces from `herdr workspace create --no-focus`, closed
-afterwards; never touch the user's own tabs. Spike design risk R1 (does the
-first click on an unfocused tray reach the pane app?) before building the tray.
+afterwards; never touch the user's own tabs. Actions invoked from the CLI act
+on the user's focused tab, so tests call `src/ops.ts` with sandbox ids instead.
 
 ## Releasing
 

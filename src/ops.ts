@@ -1,21 +1,10 @@
 // Core minimize/restore operations. Entry points resolve the active tab and
 // call these; the live tests call them with sandbox ids.
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { displayName, toView, type View } from "./entries";
 import { herdr, type PaneInfo } from "./herdr";
 import { planRebuild, type Step } from "./rebuild";
-import {
-  type Entry,
-  loadState,
-  type State,
-  saveState,
-  stateDir,
-  statusTexts,
-  tabState,
-  withLock,
-} from "./state";
+import { type Entry, loadState, type State, saveState, tabState, withLock } from "./state";
 import { fromExport, fullLayout, type Hidden, removeAll, removeLeaf, type Tree } from "./tree";
 
 export const PARKING_LABEL = "▾";
@@ -109,20 +98,6 @@ function parkingTab(state: State, workspace: string, lv: Live): string | null {
 
 const isParkingTab = (state: State, tab: string) => Object.values(state.parking).includes(tab);
 
-/** Writes the optional tab-bar status files: <state>/status/<tab id> = "▾ N". */
-function writeStatus(state: State): void {
-  const dir = join(stateDir(), "status");
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
-  for (const [tab, text] of Object.entries(statusTexts(state)))
-    writeFileSync(join(dir, tab), `${text}\n`);
-}
-
-function save(state: State): void {
-  saveState(state);
-  writeStatus(state);
-}
-
 export function liveViews(tab: string): View[] {
   const ts = loadState().tabs[tab];
   if (!ts) return [];
@@ -181,7 +156,7 @@ export async function minimize(ctx: Ctx): Promise<void> {
       ratio: removal.ratio,
       was_first: removal.wasFirst,
     });
-    save(state);
+    saveState(state);
   });
   await keepParkingLast();
 }
@@ -195,7 +170,7 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     const lv = live();
     if (!lv.byTerminal.has(terminal)) {
       ts.entries = ts.entries.filter((e) => e !== entry);
-      save(state);
+      saveState(state);
       throw new UserError("That pane has exited.");
     }
     const { tree } = await tabTree(tab, lv);
@@ -206,7 +181,7 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     ts.entries = ts.entries.filter((e) => e !== entry);
     ts.layout = full;
     if (ts.entries.length === 0) delete state.tabs[tab];
-    save(state);
+    saveState(state);
   });
 }
 
@@ -246,7 +221,7 @@ export async function reconcile(): Promise<{ closed: number }> {
     for (const [workspace, tab] of Object.entries(state.parking)) {
       if (!liveTabs.has(tab)) delete state.parking[workspace];
     }
-    save(state);
+    saveState(state);
     return { closed };
   });
 }

@@ -36,6 +36,7 @@ herdr refuses to link over an installed plugin.
 | `bun test` | All tests; `bun test tests/manifest.test.ts` for one file, `bun test -t "<name>"` for one test |
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun run lint` / `bun run format` | Biome check / check and fix |
+| `bun run test:live` | End-to-end tests against your running herdr, in throwaway workspaces (needs the checkout linked) |
 
 ## How the code is organised
 
@@ -53,9 +54,12 @@ command or socket method. In short:
 
 ## Testing against a live herdr
 
-Unit tests cover the pure logic. For behaviour that only a real herdr shows
-(moves, focus, mouse, events), test by hand or with scripts, and follow these
-rules:
+Unit tests cover the pure logic. `bun run test:live` drives a real herdr:
+it creates `mm-e2e` workspaces, minimizes and restores across several layouts,
+compares pane sizes and shell PIDs, and closes everything again. It needs your
+checkout linked as `mmss.minimize` and uses the plugin's real state directory.
+For anything else only a real herdr shows (focus, the picker, key bindings),
+test by hand and follow these rules:
 
 - Work only in throwaway workspaces you create with
   `herdr workspace create --no-focus` and close afterwards. Never touch tabs
@@ -73,7 +77,7 @@ rules:
   anything a user would notice.
 - Update `docs/design.md` in the same PR when you change behaviour it
   describes.
-- Commit messages: short imperative subject line (`add tray click handling`),
+- Commit messages: short imperative subject line (`fix restore focus after rebuild`),
   with a body explaining why when it isn't obvious.
 
 ## Using a coding agent

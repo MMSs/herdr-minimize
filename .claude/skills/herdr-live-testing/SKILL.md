@@ -1,6 +1,6 @@
 ---
 name: herdr-live-testing
-description: Use when verifying herdr-minimize behaviour against a running herdr - minimize/restore, layout rebuilds, tray clicks, focus, events, PIDs - or when checking a herdr fact before relying on it. Covers creating and tearing down throwaway workspaces safely.
+description: Use when verifying herdr-minimize behaviour against a running herdr - minimize/restore, layout rebuilds, the ▾ parking tab, the restore picker, focus, events, PIDs - or when checking a herdr fact before relying on it. Covers creating and tearing down throwaway workspaces safely.
 ---
 
 # Live herdr testing
@@ -47,7 +47,7 @@ root pane. Every command prints JSON; read ids with `jq`.
 | Pane rects (compare before/after; ±1 cell rounding is fine) | `$H pane edges --pane P \| jq '.result.edges.layout.panes'` |
 | Split tree with ratios | socket `layout.export {"pane_id": P}` (CLI `pane layout` returns rects only) |
 | Stable shell PID (other pid fields churn) | `$H pane process-info --pane P \| jq .result.process_info.shell_pid` |
-| Fake an agent for tray status | `$H pane report-agent P --source test --agent claude --state blocked` |
+| Fake an agent (status glyphs, notifications) | `$H pane report-agent P --source test --agent claude --state blocked` |
 
 Raw socket request: connect to `$HERDR_SOCKET_PATH`, write one line of
 `{"id":"1","method":"layout.export","params":{"pane_id":"…"}}` and read one line
@@ -59,7 +59,7 @@ back. From a terminal outside a herdr pane, find the path with
 `bun run test:live` runs `tests/live/` against the running herdr: minimize and
 restore across 2-, 3- and 5-pane layouts, comparing pane rects and shell PIDs,
 in throwaway `mm-e2e` workspaces it closes again. It needs this checkout
-linked as `mmss.minimize` (the tray pane is opened from the linked plugin)
+linked as `mmss.minimize` (hooks and the picker run from the linked plugin)
 and uses the plugin's real state directory. Plain `bun test` skips it.
 
 ## Testing the plugin itself

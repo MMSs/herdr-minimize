@@ -51,10 +51,7 @@ simply isn't in the tab any more, and nothing takes its place.
    - more than one → a **restore picker** opens (§4.4) so the user chooses.
    A restored pane goes back to its original position at its original size,
    and is focused. Panes come back exactly in any order.
-4. **Status (optional).** Users who add one line to their herdr config
-   (`ui.tab_bar_right`, see README) get a right-aligned `▾ N` on the tab bar
-   showing how many panes the active tab has minimized.
-5. **Closing.** Closing a tab also closes the panes minimized from it. A
+4. **Closing.** Closing a tab also closes the panes minimized from it. A
    minimized pane whose process exits is simply forgotten.
 
 ### Out of scope (v1)
@@ -78,7 +75,7 @@ scripts/preflight.sh     install-time [[build]] check that bun is present
 src/herdr.ts             thin client: CLI via HERDR_BIN_PATH + raw socket for layout/tab moves
 src/tree.ts              pure BSP-tree ops: remove/reinsert leaves, full layout bookkeeping
 src/rebuild.ts           pure: turns current + target tree into ordered herdr steps
-src/state.ts             JSON state file in HERDR_PLUGIN_STATE_DIR + lock + status texts
+src/state.ts             JSON state file in HERDR_PLUGIN_STATE_DIR + lock
 src/entries.ts           pure: display names, status glyphs, fuzzy search
 src/tui/term.ts          raw-mode terminal: input parsing, ANSI-aware clipping
 src/tui/render.ts        pure frame builder for the picker
@@ -234,8 +231,7 @@ under a `mkdir` lock:
 ```
 
 `parking` maps a workspace to its `▾` tab; `tabs` is keyed by source tab id.
-Alongside it, `status/<tab id>` holds `▾ N` for each tab with minimized panes,
-for the optional tab bar entry. Bump `version` and migrate on read whenever
+Bump `version` and migrate on read whenever
 the shape changes.
 
 ## 5. Manifest entrypoints
@@ -279,8 +275,6 @@ command = ["bun", "src/hooks/reconcile.ts"]
   matched; it never guesses.
 - **R5: picker popup.** Opening it returns `ui_busy` while another herdr modal
   is up; the action notifies instead.
-- **R6: tab bar status entry.** Relies on `ui.tab_bar_right` command entries
-  getting the active `HERDR_TAB_ID`, as herdr's docs say. Verify by hand.
 
 ## 7. Acceptance criteria
 

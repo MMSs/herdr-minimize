@@ -9,7 +9,7 @@ plus a tag.
 2. Smoke-test a real install from your branch on a clean plugin setup:
    `herdr plugin uninstall mmss.minimize` (if linked, `unlink`), then
    `herdr plugin install MMSs/herdr-minimize --ref <branch>` and exercise
-   minimize, restore, and the tray.
+   minimize, restore (direct and through the picker) and the `▾` tab.
 3. Bump `version` in **both** `herdr-plugin.toml` and `package.json` (the
    manifest test checks they match). Raise `min_herdr_version` if the release
    uses a herdr feature newer than the current minimum.

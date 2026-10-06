@@ -22,7 +22,7 @@ rather than trusting memory.
 | Min pane size ≈10% of the tab in each direction (`pane resize` and `layout.set_split_ratio` clamp there; e.g. 16 cols of a 157-col tab). | The tray can't be narrower than that. "Shrink to a sliver" is not a viable minimize. |
 | Socket `tab.move {"tab_id", "insert_index"}`: `insert_index` = current tab count moves the tab to the end; larger values fail with `tab_move_failed`. *(verified 2026-10-06)* | Keeps the `▾` parking tab last. |
 | A pane's minimum size is 10% of its **parent split** in that direction, not of the tab: a root split can't give a pane less than 16 of 157 columns, but a pane nested in a 16-column region went down to 2. No config setting changes this. *(verified 2026-10-06)* | Why the plugin has no tray (design §2, out of scope). |
-| Plugins can't add sidebar sections; `ui.tab_bar_right` (user config) shows right-aligned text from `command` entries, at most once a second. | The optional `▾ N` status is a user-config line reading a status file. |
+| Plugins can't add sidebar sections; `ui.tab_bar_right` (user config) shows right-aligned text from `command` entries, at most once a second. Those commands get `HERDR_ACTIVE_TAB_ID`, `HERDR_ACTIVE_PANE_ID`, `HERDR_ACTIVE_WORKSPACE_ID` (not `HERDR_TAB_ID`), plus `HERDR_SOCKET_PATH`/`HERDR_BIN_PATH`. *(verified 2026-10-06)* | The optional `▾ N` status is a user-config line reading a status file. |
 | Empty tabs auto-close when their last pane moves out. | Parking/staging tabs clean themselves up; the anchor pane must never leave its tab during a rebuild. |
 
 ## Plugin runtime
