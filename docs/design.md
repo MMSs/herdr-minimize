@@ -192,6 +192,10 @@ input and leaves the tiled layout alone.
   The staging tab closes by itself once empty.
 - Finally every split of D is set to its exact ratio with
   `layout.set_split_ratio`.
+- Afterwards (and after every minimize) the tab's focused pane is zoomed on
+  and off: herdr doesn't resize terminals of panes that grow when a pane is
+  moved out, and a zoom toggle makes it apply the real sizes without moving
+  focus.
 - Everything runs under the state lock, so rapid key presses serialise.
 
 ### 4.6 Events and lifecycle

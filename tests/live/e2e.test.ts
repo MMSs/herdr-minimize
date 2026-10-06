@@ -48,6 +48,29 @@ function expectSameRects(a: Map<string, Rect>, b: Map<string, Rect>) {
   }
 }
 const tabPanes = (tab: string) => herdr.listPanes().filter((p) => p.tab_id === tab);
+/** The pane's real terminal size from the kernel, as its program sees it. */
+function ptySize(pane: string): { cols: number; rows: number } {
+  const pid = cli(["pane", "process-info", "--pane", pane]).process_info.shell_pid;
+  const tty = Bun.spawnSync(["ps", "-o", "tty=", "-p", String(pid)])
+    .stdout.toString()
+    .trim();
+  const flag = process.platform === "darwin" ? "-f" : "-F";
+  const out = Bun.spawnSync(["stty", flag, `/dev/${tty}`, "size"])
+    .stdout.toString()
+    .trim();
+  const [rows, cols] = out.split(" ").map(Number) as [number, number];
+  return { cols, rows };
+}
+/** Every pane's terminal matches its rect, minus herdr's border and padding (≤4 cells). */
+function expectTerminalsMatchLayout(tab: string) {
+  const r = rects(tabPanes(tab)[0]!.pane_id);
+  for (const p of tabPanes(tab)) {
+    const rect = r.get(p.terminal_id)!;
+    const size = ptySize(p.pane_id);
+    expect(rect.width - size.cols).toBeLessThanOrEqual(4);
+    expect(rect.height - size.rows).toBeLessThanOrEqual(4);
+  }
+}
 const tabsOf = (ws: string): { tab_id: string; label: string }[] =>
   cli(["tab", "list", "--workspace", ws]).tabs;
 
@@ -207,5 +230,24 @@ describe.skipIf(!LIVE)("live herdr", () => {
     cli(["pane", "zoom", root, "--on"]);
     await restoreEntry(tab, terminalOf(b));
     expect((await herdr.exportLayout(root)).zoomed).toBe(false);
+  }, 60_000);
+
+  test("panes left behind and restored get their real terminal size (herdr resize)", async () => {
+    const { tab, root } = sandbox();
+    const [, b, c] = layouts[1]![1](root) as [string, string, string];
+    await minimize({ tab, pane: c });
+    expectTerminalsMatchLayout(tab);
+    await minimize({ tab, pane: b });
+    expectTerminalsMatchLayout(tab);
+    await restoreAll(tab);
+    expectTerminalsMatchLayout(tab);
+  }, 60_000);
+
+  test("a restored pane has focus, and keeping sizes right doesn't move it", async () => {
+    const { tab, root } = sandbox();
+    const [, b, c] = layouts[1]![1](root) as [string, string, string];
+    await minimize({ tab, pane: b });
+    await restoreEntry(tab, terminalOf(b));
+    expect((await herdr.exportLayout(c)).focused_pane_id).toBe(b);
   }, 60_000);
 });

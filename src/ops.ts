@@ -99,6 +99,21 @@ function parkingTab(state: State, workspace: string, lv: Live): string | null {
 const isParkingTab = (state: State, tab: string) => Object.values(state.parking).includes(tab);
 
 /**
+ * herdr doesn't resize the terminals of panes that grow when another pane is
+ * moved out of their tab (a native close does), so programs keep drawing at
+ * the old size. A zoom on/off makes herdr apply the real sizes; the tab ends
+ * up unzoomed, as it was. (herdr 0.9.3; see docs/herdr-api-notes.md)
+ */
+async function refreshSizes(tab: string): Promise<void> {
+  const member = herdr.listPanes().find((p) => p.tab_id === tab)?.pane_id;
+  if (!member) return;
+  // Zooming focuses the zoomed pane, so zoom the one that already has focus.
+  const pane = (await herdr.exportLayout(member)).focused_pane_id;
+  herdr.zoomOn(pane);
+  herdr.zoomOff(pane);
+}
+
+/**
  * The invariant every entry must hold: its pane is alive and sits in a ▾ tab.
  * Panes that exited or were moved back by hand fail it and are no longer
  * minimized, whatever the state file says.
@@ -171,6 +186,7 @@ export async function minimize(ctx: Ctx): Promise<void> {
       was_first: removal.wasFirst,
     });
     saveState(state);
+    await refreshSizes(ctx.tab);
   });
   await keepParkingLast();
 }
@@ -208,6 +224,7 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     ts.layout = full;
     if (ts.entries.length === 0) delete state.tabs[tab];
     saveState(state);
+    await refreshSizes(tab);
   });
 }
 

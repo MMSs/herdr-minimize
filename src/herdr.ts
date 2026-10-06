@@ -26,7 +26,12 @@ export type PaneInfo = {
   foreground_cwd?: string;
   focused: boolean;
 };
-export type LayoutExport = { tab_id: string; zoomed: boolean; root: ExportNode };
+export type LayoutExport = {
+  tab_id: string;
+  zoomed: boolean;
+  focused_pane_id: string;
+  root: ExportNode;
+};
 
 const bin = () => process.env.HERDR_BIN_PATH ?? "herdr";
 
@@ -127,6 +132,9 @@ export const herdr = {
   },
   closePane: (pane: string): void => {
     cli(["pane", "close", pane]);
+  },
+  zoomOn: (pane: string): void => {
+    cli(["pane", "zoom", pane, "--on"]);
   },
   zoomOff: (pane: string): void => {
     cli(["pane", "zoom", pane, "--off"]);
