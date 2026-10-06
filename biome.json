@@ -38,6 +38,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/tui/term.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noControlCharactersInRegex": "off"
+          }
+        }
+      }
     }
   ]
 }
