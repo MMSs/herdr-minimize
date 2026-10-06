@@ -38,6 +38,7 @@ rather than trusting memory.
 | `herdr pane read <id> --source visible --format ansi` returns the pane's current screen with colour escapes as plain text (not JSON), and works on a pane that has been moved to another tab. | Source for the restore picker's live preview. |
 | Popup panes (`placement = "popup"`, `width`/`height` as cells or `"80%"`) are session-modal, take all input including Escape, have no pane id, emit no pane events, and don't get `HERDR_PANE_ID`. Opening one returns `ui_busy` while another herdr modal is up. *(From herdr's plugin docs; not yet verified live.)* | The restore picker is a popup; the tab it acts on is handed over through state. |
 | `herdr plugin link <path> [--disabled]` — the path comes **before** options; `link --disabled <path>` fails with `unknown option`. `link` does not run `[[build]]`; `install` does. | Contributors link their checkout; run `sh scripts/preflight.sh` by hand to exercise the build step. |
+| herdr 0.9.3 has no command palette and doesn't list plugin actions in right-click menus. Actions run from `[[keys.command]] type = "plugin_action"` bindings or `herdr plugin action invoke`. *(verified 2026-10-06)* | README tells users to add key bindings; there is no other way to trigger minimize/restore. |
 | Runtime commands run from the plugin root with no shell. Build commands get no runtime env or socket. | Manifest commands are argv arrays of repo-relative paths. |
 
 ## Testing against a live herdr

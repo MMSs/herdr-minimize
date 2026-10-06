@@ -40,3 +40,11 @@ command = ["bun", "src/hooks/reconcile.ts"]
 [[events]]
 on = "tab.created"
 command = ["bun", "src/hooks/reconcile.ts"]
+
+[[panes]]
+id = "picker"
+title = "Restore pane"
+placement = "popup"
+width = "80%"
+height = "80%"
+command = ["bun", "src/picker.ts"]
