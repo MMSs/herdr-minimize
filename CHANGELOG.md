@@ -5,6 +5,10 @@ All notable changes to this plugin are documented here. The plugin uses
 release workflow from merged PR titles (see CONTRIBUTING.md); don't edit this
 file by hand.
 
+## [0.1.1] - 2026-10-08
+
+- keep minimized panes across herdr restarts (#3)
+
 ## [0.1.0] - 2026-10-06
 
 ### Added

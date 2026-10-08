@@ -1,6 +1,6 @@
 {
   "name": "herdr-minimize",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "herdr plugin: minimize panes to a clickable tray and restore them to their exact place",
   "license": "MIT",

@@ -1,6 +1,6 @@
 id = "mmss.minimize"
 name = "Minimize"
-version = "0.1.0"
+version = "0.1.1"
 # 0.9.3 is the version every herdr behaviour in docs/herdr-api-notes.md was verified against.
 min_herdr_version = "0.9.3"
 description = "Minimize panes out of the way and restore them to their exact place"
