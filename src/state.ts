@@ -1,11 +1,13 @@
 // Plugin state in $HERDR_PLUGIN_STATE_DIR/state.json. Written atomically; every
 // read-modify-write happens under a mkdir lock so rapid keypresses serialise.
+// Panes are keyed by pane id: it survives a herdr server restart, terminal
+// ids don't (docs/herdr-api-notes.md).
 import { mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Dir, Tree } from "./tree";
+import { type Dir, leaves, type Tree } from "./tree";
 
 export type Entry = {
-  terminal_id: string;
+  pane_id: string;
   name: string;
   minimized_at: string;
   siblings: string[];
@@ -19,14 +21,17 @@ export type TabState = {
   layout?: Tree | null;
 };
 export type State = {
-  version: 1;
+  version: 2;
   /** workspace id → its "▾" parking tab id */
   parking: Record<string, string>;
   /** source tab id → what was minimized from it */
   tabs: Record<string, TabState>;
 };
 
-export const emptyState = (): State => ({ version: 1, parking: {}, tabs: {} });
+export const emptyState = (): State => ({ version: 2, parking: {}, tabs: {} });
+
+/** Maps a live terminal id to its pane id; undefined when the terminal is gone. */
+export type PaneOfTerminal = (terminal: string) => string | undefined;
 
 export function stateDir(): string {
   const dir = process.env.HERDR_PLUGIN_STATE_DIR;
@@ -34,7 +39,11 @@ export function stateDir(): string {
   return dir;
 }
 
-export function loadState(dir = stateDir()): State {
+/**
+ * `paneOf` is only called for a version 1 file (keyed by terminal ids), whose
+ * ids are then rewritten to pane ids; pass a function that asks herdr.
+ */
+export function loadState(dir = stateDir(), paneOf?: () => PaneOfTerminal): State {
   let text: string;
   try {
     text = readFileSync(join(dir, "state.json"), "utf8");
@@ -43,12 +52,45 @@ export function loadState(dir = stateDir()): State {
     throw e;
   }
   const raw = JSON.parse(text) as { version?: unknown };
-  if (raw.version !== 1) throw new Error(`unsupported state version ${String(raw.version)}`);
-  const state = raw as State;
+  let state: State;
+  if (raw.version === 2) state = raw as State;
+  else if (raw.version === 1 && paneOf) state = fromV1(raw as V1State, paneOf());
+  else throw new Error(`unsupported state version ${String(raw.version)}`);
   state.parking ??= {};
   state.tabs ??= {};
   return state;
 }
+
+type V1Entry = Omit<Entry, "pane_id"> & { terminal_id: string };
+type V1State = {
+  parking?: Record<string, string>;
+  tabs?: Record<string, { entries: V1Entry[]; layout?: Tree | null }>;
+};
+
+function fromV1(v1: V1State, paneOf: PaneOfTerminal): State {
+  const tabs: Record<string, TabState> = {};
+  for (const [tab, ts] of Object.entries(v1.tabs ?? {})) {
+    const entries: Entry[] = [];
+    for (const { terminal_id, ...e } of ts.entries) {
+      const pane = paneOf(terminal_id);
+      const siblings = e.siblings.map(paneOf);
+      // A gone pane is forgotten, as reconcile would; a gone sibling just
+      // can't be matched, so restore uses its fallback placement.
+      if (pane)
+        entries.push({ ...e, pane_id: pane, siblings: siblings.filter((s) => !!s) as string[] });
+    }
+    if (entries.length === 0) continue;
+    const layout =
+      ts.layout && leaves(ts.layout).every((l) => paneOf(l)) ? relabel(ts.layout, paneOf) : null;
+    tabs[tab] = { entries, layout };
+  }
+  return { version: 2, parking: v1.parking ?? {}, tabs };
+}
+
+const relabel = (t: Tree, paneOf: PaneOfTerminal): Tree =>
+  t.kind === "leaf"
+    ? { kind: "leaf", id: paneOf(t.id) as string }
+    : { ...t, first: relabel(t.first, paneOf), second: relabel(t.second, paneOf) };
 
 export function saveState(state: State, dir = stateDir()): void {
   mkdirSync(dir, { recursive: true });

@@ -12,7 +12,7 @@ await runEntrypoint(async () => {
   const { tab } = activeContext();
   let views = newestFirst(liveViews(tab));
   if (views.length === 0) throw new UserError("No minimized panes in this tab.");
-  if (views.length === 1) return restoreEntry(tab, (views[0] as View).terminal_id);
+  if (views.length === 1) return restoreEntry(tab, (views[0] as View).pane_id);
 
   const screen = new Screen();
   let query = "";
@@ -108,10 +108,10 @@ await runEntrypoint(async () => {
   });
 
   const tick = setInterval(() => {
-    const keep = current()?.terminal_id;
+    const keep = current()?.pane_id;
     views = newestFirst(liveViews(tab));
     if (views.length === 0) return choose(null);
-    const idx = items().findIndex((r) => r.view.terminal_id === keep);
+    const idx = items().findIndex((r) => r.view.pane_id === keep);
     selected = idx >= 0 ? idx : Math.min(selected, Math.max(0, items().length - 1));
     loadPreview();
     draw();
@@ -122,6 +122,6 @@ await runEntrypoint(async () => {
   const pick = await chosen;
   clearInterval(tick);
   screen.stop();
-  if (pick) await restoreEntry(tab, pick.terminal_id);
+  if (pick) await restoreEntry(tab, pick.pane_id);
   process.exit(0);
 });

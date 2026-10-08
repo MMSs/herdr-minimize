@@ -10,7 +10,6 @@ import {
 } from "../src/entries";
 
 const view = (name: string, minimized_at: string): View => ({
-  terminal_id: name,
   pane_id: name,
   name,
   status: "none",
@@ -28,7 +27,7 @@ describe("entries", () => {
 
   test("toView uses live label/agent, keeps the stored name otherwise, and the cwd basename", () => {
     const e = {
-      terminal_id: "t1",
+      pane_id: "w9:p1",
       name: "lazygit",
       minimized_at: "2026-10-06T18:00:00Z",
       siblings: [],
@@ -46,7 +45,6 @@ describe("entries", () => {
       foreground_cwd: "/x/proj",
     };
     expect(toView(e, p)).toEqual({
-      terminal_id: "t1",
       pane_id: "w9:p1",
       name: "lazygit",
       status: "none",

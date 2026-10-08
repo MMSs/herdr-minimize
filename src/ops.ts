@@ -5,14 +5,21 @@ import { displayName, toView, type View } from "./entries";
 import { herdr, type PaneInfo } from "./herdr";
 import { marked, unmarked } from "./marker";
 import { planRebuild, type Step } from "./rebuild";
-import { type Entry, loadState, type State, saveState, tabState, withLock } from "./state";
+import {
+  type Entry,
+  loadState as loadFile,
+  type State,
+  saveState,
+  tabState,
+  withLock,
+} from "./state";
 import { fromExport, fullLayout, type Hidden, removeAll, removeLeaf, type Tree } from "./tree";
 
 export const PARKING_LABEL = "▾";
 
 const hidden = (entries: Entry[]): Hidden[] =>
   entries.map((e) => ({
-    id: e.terminal_id,
+    id: e.pane_id,
     siblings: e.siblings,
     dir: e.dir,
     ratio: e.ratio,
@@ -23,14 +30,18 @@ export class UserError extends Error {}
 
 export type Ctx = { tab: string; pane: string };
 
-type Live = { byTerminal: Map<string, PaneInfo>; byPane: Map<string, PaneInfo> };
+/** Loads state; a file from v0.1 (keyed by terminal ids) is migrated through herdr. */
+function loadState(): State {
+  return loadFile(undefined, () => {
+    const byTerminal = new Map(herdr.listPanes().map((p) => [p.terminal_id, p.pane_id]));
+    return (t) => byTerminal.get(t);
+  });
+}
+
+type Live = { byPane: Map<string, PaneInfo> };
 
 function live(): Live {
-  const panes = herdr.listPanes();
-  return {
-    byTerminal: new Map(panes.map((p) => [p.terminal_id, p])),
-    byPane: new Map(panes.map((p) => [p.pane_id, p])),
-  };
+  return { byPane: new Map(herdr.listPanes().map((p) => [p.pane_id, p])) };
 }
 
 /** The tab holding the focused pane. Context ids only cross-check it (design §4.0). */
@@ -48,18 +59,19 @@ async function tabTree(tab: string, lv: Live): Promise<{ tree: Tree; zoomed: boo
   if (!member) throw new UserError("That tab no longer exists.");
   const layout = await herdr.exportLayout(member.pane_id);
   const tree = fromExport(layout.root, (paneId) => {
-    const p = lv.byPane.get(paneId);
-    if (!p) throw new Error(`pane ${paneId} is in the layout but not in the pane list`);
-    return p.terminal_id;
+    if (!lv.byPane.has(paneId))
+      throw new Error(`pane ${paneId} is in the layout but not in the pane list`);
+    return paneId;
   });
   return { tree, zoomed: layout.zoomed };
 }
 
 async function execute(tab: string, steps: Step[], lv: Live, focus?: string): Promise<void> {
-  const paneOf = new Map([...lv.byTerminal].map(([t, p]) => [t, p.pane_id]));
-  const id = (terminal: string) => {
-    const p = paneOf.get(terminal);
-    if (!p) throw new Error(`no pane for terminal ${terminal}`);
+  // Moves inside a workspace keep pane ids; follow the move result regardless.
+  const paneOf = new Map([...lv.byPane.keys()].map((p) => [p, p]));
+  const id = (pane: string) => {
+    const p = paneOf.get(pane);
+    if (!p) throw new Error(`no live pane ${pane}`);
     return p;
   };
   let staging: string | null = null;
@@ -128,7 +140,7 @@ function markTab(tab: string, on: boolean): void {
  */
 function isParked(state: State, lv: Live) {
   const parkingTabs = new Set(Object.values(state.parking));
-  return (e: Entry) => parkingTabs.has(lv.byTerminal.get(e.terminal_id)?.tab_id ?? "");
+  return (e: Entry) => parkingTabs.has(lv.byPane.get(e.pane_id)?.tab_id ?? "");
 }
 
 export function liveViews(tab: string): View[] {
@@ -138,7 +150,7 @@ export function liveViews(tab: string): View[] {
   const lv = live();
   return ts.entries
     .filter(isParked(state, lv))
-    .map((e) => toView(e, lv.byTerminal.get(e.terminal_id) as PaneInfo));
+    .map((e) => toView(e, lv.byPane.get(e.pane_id) as PaneInfo));
 }
 
 /** Moves every workspace's "▾" tab back to the end of its tab bar. */
@@ -169,7 +181,7 @@ export async function minimize(ctx: Ctx): Promise<void> {
     const x = lv.byPane.get(ctx.pane);
     if (!x) throw new UserError("That pane no longer exists.");
     const { tree, zoomed } = await tabTree(ctx.tab, lv);
-    const removal = removeLeaf(tree, x.terminal_id);
+    const removal = removeLeaf(tree, x.pane_id);
     if (!removal) throw new UserError("Only pane in this tab — nothing to minimize.");
     if (zoomed) herdr.zoomOff(ctx.pane);
 
@@ -185,7 +197,7 @@ export async function minimize(ctx: Ctx): Promise<void> {
       : herdr.movePane(x.pane_id, ["--new-tab", "--label", PARKING_LABEL, "--no-focus"]);
     state.parking[x.workspace_id] = parked.tab_id;
     ts.entries.push({
-      terminal_id: x.terminal_id,
+      pane_id: x.pane_id,
       name,
       minimized_at: new Date().toISOString(),
       siblings: removal.siblings,
@@ -200,11 +212,11 @@ export async function minimize(ctx: Ctx): Promise<void> {
   await keepParkingLast();
 }
 
-export async function restoreEntry(tab: string, terminal: string): Promise<void> {
+export async function restoreEntry(tab: string, pane: string): Promise<void> {
   await withLock(async () => {
     const state = loadState();
     const ts = state.tabs[tab];
-    const entry = ts?.entries.find((e) => e.terminal_id === terminal);
+    const entry = ts?.entries.find((e) => e.pane_id === pane);
     if (!ts || !entry) throw new UserError("That pane is no longer minimized.");
     let lv = live();
     if (!isParked(state, lv)(entry)) {
@@ -212,9 +224,7 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
       if (ts.entries.length === 0) delete state.tabs[tab];
       saveState(state);
       throw new UserError(
-        lv.byTerminal.has(terminal)
-          ? "That pane is already back in a tab."
-          : "That pane has exited.",
+        lv.byPane.has(pane) ? "That pane is already back in a tab." : "That pane has exited.",
       );
     }
     ts.entries = ts.entries.filter(isParked(state, lv));
@@ -227,8 +237,8 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
     }
     // Restore through the tab's full layout so panes come back in any order.
     const full = fullLayout(ts.layout ?? null, tree, hidden(ts.entries));
-    const stillHidden = ts.entries.filter((e) => e !== entry).map((e) => e.terminal_id);
-    await execute(tab, planRebuild(tree, removeAll(full, stillHidden)), lv, terminal);
+    const stillHidden = ts.entries.filter((e) => e !== entry).map((e) => e.pane_id);
+    await execute(tab, planRebuild(tree, removeAll(full, stillHidden)), lv, pane);
     ts.entries = ts.entries.filter((e) => e !== entry);
     ts.layout = full;
     if (ts.entries.length === 0) delete state.tabs[tab];
@@ -240,7 +250,7 @@ export async function restoreEntry(tab: string, terminal: string): Promise<void>
 
 export async function restoreAll(tab: string): Promise<void> {
   const ts = loadState().tabs[tab];
-  for (const e of [...(ts?.entries ?? [])].reverse()) await restoreEntry(tab, e.terminal_id);
+  for (const e of [...(ts?.entries ?? [])].reverse()) await restoreEntry(tab, e.pane_id);
 }
 
 /**
@@ -263,11 +273,11 @@ export async function reconcile(): Promise<{ closed: number }> {
       let closed = 0;
       for (const [tab, ts] of Object.entries(state.tabs)) {
         ts.entries = ts.entries.filter((e) =>
-          parkingTabs.has(lv.byTerminal.get(e.terminal_id)?.tab_id ?? ""),
+          parkingTabs.has(lv.byPane.get(e.pane_id)?.tab_id ?? ""),
         );
         if (!liveTabs.has(tab)) {
           for (const e of ts.entries) {
-            herdr.closePane((lv.byTerminal.get(e.terminal_id) as PaneInfo).pane_id);
+            herdr.closePane(e.pane_id);
             closed++;
           }
           ts.entries = [];

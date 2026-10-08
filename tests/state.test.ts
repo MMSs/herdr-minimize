@@ -18,10 +18,10 @@ describe("state", () => {
   test("save then load round-trips and leaves no temp files", () => {
     const s = emptyState();
     tabState(s, "w1:t1").entries.push({
-      terminal_id: "term_1",
+      pane_id: "w1:p3",
       name: "zsh",
       minimized_at: "2026-10-06T18:00:00.000Z",
-      siblings: ["term_2"],
+      siblings: ["w1:p2"],
       dir: "down",
       ratio: 0.6,
       was_first: false,
@@ -32,8 +32,115 @@ describe("state", () => {
   });
 
   test("a file from before the parking field loads with an empty parking map", async () => {
-    await Bun.write(join(dir, "state.json"), JSON.stringify({ version: 1, tabs: {} }));
+    await Bun.write(join(dir, "state.json"), JSON.stringify({ version: 2, tabs: {} }));
     expect(loadState(dir).parking).toEqual({});
+  });
+
+  test("a version 1 file keyed by terminal ids is migrated to pane ids", async () => {
+    const v1 = {
+      version: 1,
+      parking: { w1: "w1:t4" },
+      tabs: {
+        "w1:t1": {
+          entries: [
+            {
+              terminal_id: "term_c",
+              name: "zsh",
+              minimized_at: "2026-10-06T18:00:00.000Z",
+              siblings: ["term_b"],
+              dir: "down",
+              ratio: 0.6,
+              was_first: false,
+            },
+          ],
+          layout: {
+            kind: "split",
+            dir: "right",
+            ratio: 0.5,
+            first: { kind: "leaf", id: "term_a" },
+            second: {
+              kind: "split",
+              dir: "down",
+              ratio: 0.6,
+              first: { kind: "leaf", id: "term_b" },
+              second: { kind: "leaf", id: "term_c" },
+            },
+          },
+        },
+      },
+    };
+    await Bun.write(join(dir, "state.json"), JSON.stringify(v1));
+    const live: Record<string, string> = { term_a: "w1:p1", term_b: "w1:p2", term_c: "w1:p3" };
+    const s = loadState(dir, () => (t) => live[t]);
+    expect(s.version).toBe(2);
+    expect(s.parking).toEqual({ w1: "w1:t4" });
+    const ts = s.tabs["w1:t1"]!;
+    expect(ts.entries).toEqual([
+      {
+        pane_id: "w1:p3",
+        name: "zsh",
+        minimized_at: "2026-10-06T18:00:00.000Z",
+        siblings: ["w1:p2"],
+        dir: "down",
+        ratio: 0.6,
+        was_first: false,
+      },
+    ]);
+    expect(ts.layout).toEqual({
+      kind: "split",
+      dir: "right",
+      ratio: 0.5,
+      first: { kind: "leaf", id: "w1:p1" },
+      second: {
+        kind: "split",
+        dir: "down",
+        ratio: 0.6,
+        first: { kind: "leaf", id: "w1:p2" },
+        second: { kind: "leaf", id: "w1:p3" },
+      },
+    });
+  });
+
+  test("migration drops entries whose terminal is gone and keeps unknown ids out of the layout", async () => {
+    const v1 = {
+      version: 1,
+      parking: {},
+      tabs: {
+        "w1:t1": {
+          entries: [
+            {
+              terminal_id: "term_gone",
+              name: "zsh",
+              minimized_at: "x",
+              siblings: ["term_a"],
+              dir: "right",
+              ratio: 0.5,
+              was_first: false,
+            },
+          ],
+          layout: {
+            kind: "split",
+            dir: "right",
+            ratio: 0.5,
+            first: { kind: "leaf", id: "term_a" },
+            second: { kind: "leaf", id: "term_gone" },
+          },
+        },
+      },
+    };
+    await Bun.write(join(dir, "state.json"), JSON.stringify(v1));
+    const s = loadState(dir, () => (t) => (t === "term_a" ? "w1:p1" : undefined));
+    expect(s.tabs).toEqual({});
+  });
+
+  test("the live lookup is only made for a version 1 file", async () => {
+    await Bun.write(join(dir, "state.json"), JSON.stringify(emptyState()));
+    let asked = false;
+    loadState(dir, () => {
+      asked = true;
+      return () => undefined;
+    });
+    expect(asked).toBe(false);
   });
 
   test("unknown version is refused instead of misread", async () => {

@@ -29,15 +29,11 @@ function sandbox(): { ws: string; tab: string; root: string } {
 const splitPane = (p: string, dir: "right" | "down", ratio = 0.5): string =>
   cli(["pane", "split", p, "--direction", dir, "--ratio", String(ratio), "--no-focus"]).pane
     .pane_id;
-const terminalOf = (p: string): string => cli(["pane", "get", p]).pane.terminal_id;
 const pid = (p: string): number =>
   cli(["pane", "process-info", "--pane", p]).process_info.shell_pid;
 function rects(anyPane: string): Map<string, Rect> {
-  const byPane = new Map(herdr.listPanes().map((p) => [p.pane_id, p.terminal_id]));
   const layout = cli(["pane", "edges", "--pane", anyPane]).edges.layout;
-  return new Map(
-    layout.panes.map((p: { pane_id: string; rect: Rect }) => [byPane.get(p.pane_id), p.rect]),
-  );
+  return new Map(layout.panes.map((p: { pane_id: string; rect: Rect }) => [p.pane_id, p.rect]));
 }
 function expectSameRects(a: Map<string, Rect>, b: Map<string, Rect>) {
   expect([...b.keys()].sort()).toEqual([...a.keys()].sort());
@@ -65,7 +61,7 @@ function ptySize(pane: string): { cols: number; rows: number } {
 function expectTerminalsMatchLayout(tab: string) {
   const r = rects(tabPanes(tab)[0]!.pane_id);
   for (const p of tabPanes(tab)) {
-    const rect = r.get(p.terminal_id)!;
+    const rect = r.get(p.pane_id)!;
     const size = ptySize(p.pane_id);
     expect(rect.width - size.cols).toBeLessThanOrEqual(4);
     expect(rect.height - size.rows).toBeLessThanOrEqual(4);
@@ -119,7 +115,7 @@ describe.skipIf(!LIVE)("live herdr", () => {
         const parking = loadState().parking[ws]!;
         expect(tabsOf(ws).at(-1)).toMatchObject({ tab_id: parking, label: PARKING_LABEL });
         expect(tabPanes(parking).map((q) => q.pane_id)).toEqual([p]); // same workspace: id kept
-        await restoreEntry(tab, terminalOf(p));
+        await restoreEntry(tab, p);
         expect(loadState().tabs[tab]).toBeUndefined();
         expect(tabsOf(ws).some((t) => t.label === PARKING_LABEL)).toBe(false); // empty ▾ tab closed
         expectSameRects(before, rects(tabPanes(tab)[0]!.pane_id));
@@ -132,11 +128,10 @@ describe.skipIf(!LIVE)("live herdr", () => {
     const { tab, root } = sandbox();
     const [a, b, c] = layouts[1]![1](root) as [string, string, string];
     const before = rects(a);
-    const [tb, tc] = [terminalOf(b), terminalOf(c)];
     await minimize({ tab, pane: c });
     await minimize({ tab, pane: b });
-    await restoreEntry(tab, tc);
-    await restoreEntry(tab, tb);
+    await restoreEntry(tab, c);
+    await restoreEntry(tab, b);
     expectSameRects(before, rects(a));
   }, 60_000);
 
@@ -179,11 +174,10 @@ describe.skipIf(!LIVE)("live herdr", () => {
   test("restore still works after the sibling was closed", async () => {
     const { tab, root } = sandbox();
     const [, b, c] = layouts[1]![1](root) as [string, string, string];
-    const tc = terminalOf(c);
     await minimize({ tab, pane: c });
     cli(["pane", "close", b]);
-    await restoreEntry(tab, tc);
-    expect(tabPanes(tab).some((q) => q.terminal_id === tc)).toBe(true);
+    await restoreEntry(tab, c);
+    expect(tabPanes(tab).some((q) => q.pane_id === c)).toBe(true);
   }, 60_000);
 
   test("a minimized pane that exits is dropped on reconcile", async () => {
@@ -215,7 +209,7 @@ describe.skipIf(!LIVE)("live herdr", () => {
     await minimize({ tab, pane: b });
     cli(["pane", "move", b, "--tab", tab, "--target-pane", root, "--split", "right", "--no-focus"]);
     expect(liveViews(tab)).toEqual([]);
-    await expect(restoreEntry(tab, terminalOf(b))).rejects.toBeInstanceOf(UserError);
+    await expect(restoreEntry(tab, b)).rejects.toBeInstanceOf(UserError);
     expect(loadState().tabs[tab]).toBeUndefined();
     await minimize({ tab, pane: b }); // no duplicate entry
     expect(loadState().tabs[tab]!.entries).toHaveLength(1);
@@ -228,7 +222,7 @@ describe.skipIf(!LIVE)("live herdr", () => {
     splitPane(b, "down");
     await minimize({ tab, pane: b });
     cli(["pane", "zoom", root, "--on"]);
-    await restoreEntry(tab, terminalOf(b));
+    await restoreEntry(tab, b);
     expect((await herdr.exportLayout(root)).zoomed).toBe(false);
   }, 60_000);
 
@@ -247,7 +241,7 @@ describe.skipIf(!LIVE)("live herdr", () => {
     const { tab, root } = sandbox();
     const [, b, c] = layouts[1]![1](root) as [string, string, string];
     await minimize({ tab, pane: b });
-    await restoreEntry(tab, terminalOf(b));
+    await restoreEntry(tab, b);
     expect((await herdr.exportLayout(c)).focused_pane_id).toBe(b);
   }, 60_000);
 
@@ -260,9 +254,9 @@ describe.skipIf(!LIVE)("live herdr", () => {
     expect(label()).toBe("work ▾");
     await minimize({ tab, pane: c });
     expect(label()).toBe("work ▾");
-    await restoreEntry(tab, terminalOf(c));
+    await restoreEntry(tab, c);
     expect(label()).toBe("work ▾"); // one still minimized
-    await restoreEntry(tab, terminalOf(b));
+    await restoreEntry(tab, b);
     expect(label()).toBe("work");
     expect(tabsOf(ws).at(-1)!.label).not.toBe("▾ ▾"); // the parking tab is never marked
   }, 60_000);

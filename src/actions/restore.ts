@@ -6,7 +6,7 @@ await runEntrypoint(async () => {
   const { tab } = activeContext();
   const [only, ...more] = liveViews(tab);
   if (!only) throw new UserError("No minimized panes in this tab.");
-  if (more.length === 0) return restoreEntry(tab, only.terminal_id);
+  if (more.length === 0) return restoreEntry(tab, only.pane_id);
   try {
     herdr.openPluginPane("picker"); // manifest placement: popup
   } catch (e) {
