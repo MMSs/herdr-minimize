@@ -4,7 +4,6 @@ import type { AgentStatus, PaneInfo } from "./herdr";
 import type { Entry } from "./state";
 
 export type View = {
-  terminal_id: string;
   pane_id: string;
   name: string;
   status: AgentStatus | "none";
@@ -22,7 +21,6 @@ export function displayName(
 export function toView(e: Entry, p: PaneInfo): View {
   const dir = p.foreground_cwd || p.cwd || "";
   return {
-    terminal_id: e.terminal_id,
     pane_id: p.pane_id,
     name: p.label?.trim() || p.agent || e.name,
     status: p.agent ? p.agent_status : "none",

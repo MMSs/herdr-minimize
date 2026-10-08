@@ -118,8 +118,9 @@ looking at. The `▾` tab itself is refused as a source tab.
 Each workspace gets at most one `▾` tab (its id is in state). Minimizing moves
 the pane into it (`pane move --tab ▾ --split right`, or `--new-tab --label ▾`
 for the first one), always `--no-focus`. Because the pane never leaves its
-workspace, its pane id stays the same; the plugin still keys everything by
-`terminal_id`, which never changes, and looks pane ids up before each call.
+workspace, its pane id stays the same, so the plugin keys everything by pane
+id. Pane ids also survive a herdr server restart; terminal ids don't, which is
+why they are not used (state files from v0.1 are migrated, §4.7).
 After every minimize, and on every `tab.created` event, the `▾` tab is moved
 back to the end of its workspace's tab bar (`tab.move` with `insert_index` =
 tab count).
@@ -128,9 +129,9 @@ tab count).
 
 1. Refuse if T is a `▾` tab, or X is T's only pane (notification). Unzoom T
    if zoomed.
-2. `layout.export` → tree keyed by terminal id. Update T's **full layout**
-   (§4.3) and record an entry: X's terminal id, name, time, and its placement
-   (`siblings`: terminal ids of X's sibling subtree, the parent split's `dir`
+2. `layout.export` → tree keyed by pane id. Update T's **full layout**
+   (§4.3) and record an entry: X's pane id, name, time, and its placement
+   (`siblings`: pane ids of X's sibling subtree, the parent split's `dir`
    and `ratio`, whether X was the first child).
 3. Move X into the `▾` tab. Its sibling takes its space, exactly as if X had
    been closed; no rebuild is needed.
@@ -226,19 +227,19 @@ under a `mkdir` lock:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "parking": { "w2": "w2:t4" },
   "tabs": {
     "w2:t1": {
       "entries": [
-        { "terminal_id": "term_65d2fbbd24e7052", "name": "lazygit",
+        { "pane_id": "w2:p3", "name": "lazygit",
           "minimized_at": "2026-10-06T18:00:00.000Z",
-          "siblings": ["term_65d2fbbd1de2e51"], "dir": "down", "ratio": 0.6,
+          "siblings": ["w2:p2"], "dir": "down", "ratio": 0.6,
           "was_first": false }
       ],
       "layout": { "kind": "split", "dir": "down", "ratio": 0.6,
-                  "first": { "kind": "leaf", "id": "term_65d2fbbd1de2e51" },
-                  "second": { "kind": "leaf", "id": "term_65d2fbbd24e7052" } }
+                  "first": { "kind": "leaf", "id": "w2:p2" },
+                  "second": { "kind": "leaf", "id": "w2:p3" } }
     }
   }
 }
@@ -246,7 +247,9 @@ under a `mkdir` lock:
 
 `parking` maps a workspace to its `▾` tab; `tabs` is keyed by source tab id.
 Bump `version` and migrate on read whenever
-the shape changes.
+the shape changes. Version 1 (v0.1) keyed panes by `terminal_id`; reading one
+maps each terminal id to its live pane id, drops entries whose pane is gone and
+discards a stored layout that names a gone pane (it is rebuilt, §4.3).
 
 ## 5. Manifest entrypoints
 
@@ -284,9 +287,6 @@ command = ["bun", "src/hooks/reconcile.ts"]
 - **R2: rebuild flicker.** The general-path rebuild reflows the tab briefly.
   Most minimizes need no rebuild at all now; restores use the fast path when
   they can.
-- **R3: server restart.** Unverified whether terminal ids survive a herdr
-  server restart/handoff. Startup reconcile drops anything that can't be
-  matched; it never guesses.
 - **R5: picker popup.** Opening it returns `ui_busy` while another herdr modal
   is up; the action notifies instead.
 

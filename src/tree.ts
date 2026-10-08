@@ -1,5 +1,6 @@
 // Pure operations on herdr's binary split layout. Leaves are keyed by a
-// stable id (we use terminal ids; pane ids change across workspaces).
+// stable id (we use pane ids, which survive moves within a workspace and
+// server restarts).
 
 export type Dir = "right" | "down";
 export type Leaf = { kind: "leaf"; id: string };

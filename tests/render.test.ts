@@ -4,7 +4,6 @@ import { renderPicker } from "../src/tui/render";
 import { stripAnsi } from "../src/tui/term";
 
 const v = (name: string, cwd: string | null = "proj", status: View["status"] = "none"): View => ({
-  terminal_id: name,
   pane_id: name,
   name,
   status,
