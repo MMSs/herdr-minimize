@@ -54,8 +54,8 @@ command = "mmss.minimize.restore"
 description = "restore minimized pane"
 ```
 
-Update by running the install command again. Remove with
-`herdr plugin uninstall mmss.minimize`.
+Update with `herdr plugin update mmss.minimize` (herdr 0.9.4+), or by running
+the install command again. Remove with `herdr plugin uninstall mmss.minimize`.
 
 ## Limitations
 

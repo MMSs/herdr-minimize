@@ -1,9 +1,10 @@
 # herdr API notes
 
 herdr behaviour this plugin depends on, verified live against **herdr 0.9.3**
-in throwaway workspaces. herdr's docs don't cover most of it, so when you
-re-verify something on a newer herdr, update the row and the version here
-rather than trusting memory.
+in throwaway workspaces, and re-checked on **herdr 0.9.5** (2026-10-14: the
+live suite passes, socket params match `herdr api schema`, rows marked below).
+herdr's docs don't cover most of it, so when you re-verify something on a
+newer herdr, update the row and the version here rather than trusting memory.
 
 ## Pane and layout primitives
 
@@ -11,7 +12,7 @@ rather than trusting memory.
 |---|---|
 | `pane move <id> --new-tab --no-focus` / `--workspace` moves a live pane; the shell PID and `terminal_id` survive. `--new-tab` without `--workspace` creates the tab in the pane's own workspace. | Minimizing = moving the pane to a parking location. Nothing is killed. |
 | **Moving a pane into another workspace gives it a new pane id** (`w1Z:p3` became `w10:p1`); moves inside one workspace keep it. The old id happened to keep resolving to the moved pane, but that is undocumented. The new pane is in the move response at `.result.move_result.pane`. *(verified 2026-10-06)* | Everything is keyed by `terminal_id`; pane ids are looked up fresh before each call. The rebuild staging tab stays in the tab's own workspace. |
-| **A server restart (`herdr session stop`, quitting herdr) gives every pane a new `terminal_id`**; workspace, tab and pane ids, tab labels and the layout are restored from `session.json`. `pane swap` keeps each pane id with its terminal. *(verified 2026-10-08 on a separate `herdr --session`)* | State is keyed by pane id, never terminal id (v0.1 lost every minimized pane on restart). |
+| **A server restart (`herdr session stop`, quitting herdr) gives every pane a new `terminal_id`**; workspace, tab and pane ids, tab labels and the layout are restored from `session.json`. `pane swap` keeps each pane id with its terminal. *(verified 2026-10-08 on a separate `herdr --session`; unchanged on 0.9.5, 2026-10-14)* | State is keyed by pane id, never terminal id (v0.1 lost every minimized pane on restart). |
 | `pane move <id> --new-workspace --label L --tab-label T --no-focus` creates a workspace for the pane. Empty workspaces auto-close. | Creates the parking workspace on first minimize; it disappears with the last restore. |
 | A `pane move` that leaves the tree unchanged returns `changed: false` and ignores `--ratio`. | Sizes are fixed with `layout.set_split_ratio`, not by re-moving. |
 | Socket `layout.set_split_ratio {"tab_id", "path", "ratio"}`: `path` is an array of booleans from the root, `true` = second child, `[]` = root. Ratio 0.9 on a 157-col tab gives a 16-col right pane. *(verified 2026-10-06)* | Every rebuild ends by setting each split to its exact recorded ratio. |
@@ -26,6 +27,7 @@ rather than trusting memory.
 | Plugins can't add sidebar sections; `ui.tab_bar_right` (user config) shows right-aligned text from `command` entries, at most once a second. Those commands get `HERDR_ACTIVE_TAB_ID`, `HERDR_ACTIVE_PANE_ID`, `HERDR_ACTIVE_WORKSPACE_ID` (not `HERDR_TAB_ID`), plus `HERDR_SOCKET_PATH`/`HERDR_BIN_PATH`. *(verified 2026-10-06)* | The optional `▾ N` status is a user-config line reading a status file. |
 | **`pane move` out of a tab doesn't resize the terminals of the panes that grow into the freed space** (their programs keep the old size until something makes herdr redraw them); a native `pane close` does resize them. A zoom on/off resizes every pane of the tab, and focuses the zoomed pane. *(verified 2026-10-06 by reading PTY sizes with `stty`)* | After every minimize and restore the plugin zooms the tab's already-focused pane on and off. |
 | Tab labels: `herdr tab rename <tab> <label>`; there is no `--clear`, and socket `tab.rename` with `"label": ""` leaves a blank label rather than automatic numbering. Unnamed tabs report their position as the label (`"1"`), which follows the tab when it moves. *(verified 2026-10-06)* | The ` ▾` marker restores the exact previous label. |
+| CLI `pane close` on a workspace's only pane closes it (and the workspace) without asking; the confirm added in 0.9.4 is UI-only. *(verified 0.9.5, 2026-10-14)* | Reconcile can close a minimized pane that is the last pane of its workspace. |
 | Empty tabs auto-close when their last pane moves out. | Parking/staging tabs clean themselves up; the anchor pane must never leave its tab during a rebuild. |
 
 ## Plugin runtime

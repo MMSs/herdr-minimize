@@ -15,7 +15,7 @@ layout, and putting it back by hand never reproduces the original size.
 Upstream has open ideas for this (discussions
 [#1244 stacked panes](https://github.com/herdrdev/herdr/discussions/1244),
 [#4425 multi-pane slots](https://github.com/herdrdev/herdr/discussions/4425))
-but nothing is merged as of herdr 0.9.3.
+but nothing is merged as of herdr 0.9.5.
 
 ### Prior art
 
