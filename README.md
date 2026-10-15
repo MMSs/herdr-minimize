@@ -70,6 +70,7 @@ the install command again. Remove with `herdr plugin uninstall mmss.minimize`.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
