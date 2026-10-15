@@ -4,6 +4,9 @@ Thanks for helping. Bug reports, design discussion and pull requests are all
 welcome. For anything bigger than a small fix, open an issue first so we can
 agree on the approach before you write code.
 
+Everyone taking part in this project follows the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Setup
 
 You need herdr 0.9.3+ on macOS or Linux, [Bun](https://bun.sh) 1.2+, and git.

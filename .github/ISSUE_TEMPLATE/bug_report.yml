@@ -27,7 +27,8 @@ body:
     id: plugin
     attributes:
       label: Plugin version
-      description: Output of `herdr plugin list --plugin mmss.minimize`
+      description: Output of `herdr plugin list --plugin mmss.minimize --json | grep -o '"version":"[^"]*"'`
+      placeholder: '"version":"0.1.1"'
     validations:
       required: true
   - type: input
